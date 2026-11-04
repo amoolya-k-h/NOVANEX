@@ -1,0 +1,58 @@
+# Environment & Sensitive Credentials
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Python Virtual Environments
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+env/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node & Frontend Dependencies & Build Output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.npm
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local Databases & Uploaded Archives
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+repoguard.db
+uploads/
+backend/uploads/
+
+# OS Generated
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editor & IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+

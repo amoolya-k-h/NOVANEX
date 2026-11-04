@@ -1,0 +1,21 @@
+# Web Framework
+Django==2.0.0
+Flask==0.12.0
+Werkzeug==0.14.1
+
+# Database
+SQLAlchemy==1.1.0
+pymysql==0.8.0
+
+# Utilities
+requests==2.18.0
+Pillow==5.0.0
+PyYAML==3.12
+cryptography==1.9
+
+# Serialization
+PyJWT==1.5.0
+marshmallow==2.14.0
+
+# Dev
+Jinja2==2.9.0

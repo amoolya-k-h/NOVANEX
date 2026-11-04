@@ -1,0 +1,27 @@
+app:
+  name: "My Vulnerable App"
+  debug: true
+  secret_key: "hardcoded-secret-key-12345"
+  allowed_hosts: ["*"]
+
+database:
+  host: "db.example.com"
+  port: 5432
+  name: "production_db"
+  username: "db_admin"
+  password: "Passw0rd!2024"  # hardcoded
+  
+redis:
+  host: "redis.example.com"
+  password: "redis_secret_password"
+  
+aws:
+  access_key: "AKIAIOSFODNN7EXAMPLE"
+  secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  region: "us-east-1"
+
+security:
+  enable_cors: true
+  cors_origins: ["*"]
+  ssl_verify: false
+  disable_auth: true
