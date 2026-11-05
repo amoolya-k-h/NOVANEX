@@ -69,6 +69,65 @@ def generate_structured_diff(finding: Dict[str, Any]) -> Dict[str, Any]:
         additions = 1
         deletions = 1
 
+    elif cat == "sast":
+        # Insecure Code Pattern (SQLi, Command Injection, Path Traversal, Weak Crypto)
+        title_lower = title.lower()
+        start_line = max(1, line_number - 1)
+        hunk = f"@@ -{start_line},3 +{start_line},5 @@"
+
+        if "sql" in title_lower:
+            summary = "Remediated SQL injection by replacing dynamic string interpolation with parameterized queries."
+            reasoning = "Unescaped user input concatenated into SQL queries allows attackers to bypass authentication and read or modify arbitrary database records. Parameterized queries bind arguments separately from SQL parsing."
+            lines = [
+                {"type": "context", "old_lineno": start_line, "new_lineno": start_line, "content": "# Authenticate user query"},
+                {"type": "deletion", "old_lineno": line_number, "new_lineno": None, "content": 'query = f"SELECT * FROM users WHERE username=\'{username}\' AND password=\'{password}\'"'},
+                {"type": "deletion", "old_lineno": line_number + 1, "new_lineno": None, "content": 'cursor.execute(query)'},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number, "content": '# Parameterized query prevents SQL injection attacks'},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 1, "content": 'query = "SELECT * FROM users WHERE username = ? AND password = ?"'},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 2, "content": 'cursor.execute(query, (username, password))'},
+                {"type": "context", "old_lineno": line_number + 2, "new_lineno": line_number + 3, "content": "user = cursor.fetchone()"},
+            ]
+            additions = 3
+            deletions = 2
+        elif "command" in title_lower:
+            summary = "Remediated Command Injection by disabling shell execution and passing arguments as safe array."
+            reasoning = "Invoking the system shell (shell=True) allows attackers to inject command separators (; | &&) to execute arbitrary commands. Disabling the shell treats input purely as literal arguments."
+            lines = [
+                {"type": "context", "old_lineno": start_line, "new_lineno": start_line, "content": "cmd = request.form.get('cmd')"},
+                {"type": "deletion", "old_lineno": line_number, "new_lineno": None, "content": "result = subprocess.run(cmd, shell=True, capture_output=True, text=True)"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number, "content": "# Restrict command execution and avoid invoking system shell"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 1, "content": "import shlex"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 2, "content": "safe_args = shlex.split(cmd)"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 3, "content": "result = subprocess.run(safe_args, shell=False, capture_output=True, text=True, check=True)"},
+                {"type": "context", "old_lineno": line_number + 1, "new_lineno": line_number + 4, "content": "return jsonify({'output': result.stdout})"},
+            ]
+            additions = 4
+            deletions = 1
+        elif "path" in title_lower or "traversal" in title_lower:
+            summary = "Remediated Path Traversal by validating base path and stripping directory traversal characters."
+            reasoning = "Unchecked file paths allow attackers to pass '../' sequences to traverse out of intended directories and read arbitrary system files (e.g. /etc/passwd or application secrets)."
+            lines = [
+                {"type": "context", "old_lineno": start_line, "new_lineno": start_line, "content": "filename = request.args.get('name')"},
+                {"type": "deletion", "old_lineno": line_number, "new_lineno": None, "content": 'filepath = f"/var/data/{filename}"'},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number, "content": "# Sanitize filename to prevent directory traversal"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 1, "content": "safe_name = os.path.basename(filename)"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 2, "content": 'filepath = os.path.join("/var/data", safe_name)'},
+                {"type": "context", "old_lineno": line_number + 1, "new_lineno": line_number + 3, "content": "with open(filepath, 'r') as f:"},
+            ]
+            additions = 3
+            deletions = 1
+        else:
+            summary = f"Remediated insecure code practice for {title}."
+            reasoning = "Applied secure coding standards and validated inputs."
+            lines = [
+                {"type": "deletion", "old_lineno": line_number, "new_lineno": None, "content": evidence if evidence else "# Insecure pattern"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number, "content": "# Hardened implementation"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 1, "content": "import secrets, hashlib"},
+                {"type": "addition", "old_lineno": None, "new_lineno": line_number + 2, "content": "hashed = hashlib.sha256(password.encode()).hexdigest()"},
+            ]
+            additions = 3
+            deletions = 1
+
     else:
         # Misconfiguration / IaC
         if "dockerfile" in file_path.lower():

@@ -7,6 +7,7 @@ from typing import Dict, Callable, Optional
 from .gitleaks import GitleaksScanner
 from .trivy import TrivyScanner
 from .osv_scanner import OSVScanner
+from .semgrep import SemgrepScanner
 from .base import ScannerResult
 from app.core.config import settings
 import logging
@@ -19,6 +20,7 @@ class ScanOrchestrator:
         self.gitleaks = GitleaksScanner(timeout=settings.SCAN_TIMEOUT)
         self.trivy = TrivyScanner(timeout=settings.SCAN_TIMEOUT)
         self.osv = OSVScanner(timeout=settings.SCAN_TIMEOUT)
+        self.semgrep = SemgrepScanner(timeout=settings.SCAN_TIMEOUT)
 
     async def extract_project(self, zip_path: str) -> str:
         extract_dir = os.path.join(settings.UPLOAD_DIR, f"extracted_{uuid.uuid4().hex}")
@@ -55,11 +57,12 @@ class ScanOrchestrator:
             run(self.gitleaks, "gitleaks"),
             run(self.trivy, "trivy"),
             run(self.osv, "osv"),
+            run(self.semgrep, "semgrep"),
             return_exceptions=True,
         )
 
         out = {}
-        for i, (name, result) in enumerate(zip(["gitleaks", "trivy", "osv"], results)):
+        for i, (name, result) in enumerate(zip(["gitleaks", "trivy", "osv", "semgrep"], results)):
             if isinstance(result, Exception):
                 out[name] = ScannerResult(name, False, [], error=str(result))
             else:

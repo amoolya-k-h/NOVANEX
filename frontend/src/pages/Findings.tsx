@@ -1,395 +1,410 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   Search, Plus, Download, ChevronDown, CheckCircle2, AlertTriangle,
-  FileCode, ExternalLink, Filter
+  FileCode, ExternalLink, Filter, ArrowUpDown, Shield, RefreshCw, X
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useScanStore } from '../store/useScanStore'
 import { getFindings, listScans } from '../api/client'
 import { Finding } from '../types'
+import { SeverityBadge } from '../components/SeverityBadge'
 import toast from 'react-hot-toast'
 
 export default function Findings() {
-  const { openScanModal, openDrawer, findings, setFindings } = useScanStore()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const scanIdFromUrl = searchParams.get('scan')
 
-  const [activeTab, setActiveTab] = useState<'open' | 'resolved' | 'all'>('open')
-  const [search, setSearch] = useState('')
-  const [selectedRepo, setSelectedRepo] = useState('all')
+  const { openDrawer, findings, setFindings, scans, setScans } = useScanStore()
+
+  const [loading, setLoading] = useState(true)
+  const [selectedScanId, setSelectedScanId] = useState<string>(scanIdFromUrl || 'all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedSeverity, setSelectedSeverity] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedStatus, setSelectedStatus] = useState('all')
+  const [sortBy, setSortBy] = useState<'risk' | 'severity' | 'date' | 'title'>('risk')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  // Load scans and findings
+  const loadData = () => {
+    setLoading(true)
+    listScans()
+      .then((sRes) => {
+        const scanList = sRes.data || []
+        setScans(scanList)
+
+        let targetScanId = scanIdFromUrl
+        if (!targetScanId && scanList.length > 0) {
+          targetScanId = scanList[0].id
+        }
+
+        if (targetScanId && targetScanId !== 'all') {
+          setSelectedScanId(targetScanId)
+          return getFindings(targetScanId).then((fRes) => {
+            setFindings(fRes.data.findings || [])
+          })
+        } else if (scanList.length > 0) {
+          return getFindings(scanList[0].id).then((fRes) => {
+            setFindings(fRes.data.findings || [])
+          })
+        } else {
+          setFindings([])
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch findings:', err)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }
 
   useEffect(() => {
-    listScans().then((sRes) => {
-      const scans = sRes.data || []
+    loadData()
+  }, [scanIdFromUrl])
+
+  const handleScanChange = (newScanId: string) => {
+    setSelectedScanId(newScanId)
+    if (newScanId === 'all') {
+      setSearchParams({})
       if (scans.length > 0) {
-        getFindings(scans[0].id).then((fRes) => {
-          setFindings(fRes.data.findings || [])
-        })
+        getFindings(scans[0].id).then((res) => setFindings(res.data.findings || []))
       }
-    })
-  }, [])
-
-  // Sample findings fallback matching video
-  const defaultList = [
-    {
-      id: 'f-1',
-      title: "vm2: vm2 NodeVM builtin '[]' exposes 'os' and 'dns' — process-wide observability reads AND writes that hijack the host (sibling class of GHSA-9g8x-92q2-p28f)",
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: "NodeVM builtin '[]' exposes 'os' and 'dns' process-wide observability reads and writes that hijack the host sandbox.",
-      fixed_version: '3.11.6',
-      package_name: 'vm2',
-      package_version: '3.9.16',
-      cve_id: 'GHSA-9g8x-92q2-p28f',
-      risk_score: 95,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-2',
-      title: 'vm2: vm2 NodeVM before 3.12.1 Remote Code Execution via child_process',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'Arbitrary remote code execution flaw in vm2 sandbox breakout.',
-      fixed_version: '3.12.1',
-      package_name: 'vm2',
-      package_version: '3.9.16',
-      cve_id: 'CVE-2023-37466',
-      risk_score: 92,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-3',
-      title: 'vm2: vm2 before 3.11.7 Authentication Bypass via node: Prefix',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'Prefix bypass allows loading unauthorized node builtins.',
-      fixed_version: '3.11.7',
-      package_name: 'vm2',
-      package_version: '3.9.16',
-      cve_id: 'CVE-2023-37903',
-      risk_score: 89,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-4',
-      title: 'vm2: vm2, vm2 NodeVM before 3.11.6 Sandbox Escape via NodeVM',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'Sandbox escape in NodeVM implementation.',
-      fixed_version: '3.11.6',
-      package_name: 'vm2',
-      package_version: '3.9.15',
-      cve_id: 'CVE-2023-32314',
-      risk_score: 88,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-5',
-      title: 'vm2: custom inspect function allows attackers to escape the sandbox and run arbitrary code',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'Custom inspect method vulnerability in NodeVM.',
-      fixed_version: '3.11.6',
-      package_name: 'vm2',
-      package_version: '3.9.14',
-      cve_id: 'CVE-2023-37903',
-      risk_score: 85,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-6',
-      title: 'vm2: vm2 Promise handler sanitization can be bypassed allowing attackers to escape the sandbox and run arbitrary code',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'Promise handler escape flaw in vm2.',
-      fixed_version: '3.11.6',
-      package_name: 'vm2',
-      package_version: '3.9.14',
-      cve_id: 'CVE-2023-37466',
-      risk_score: 84,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-7',
-      title: 'vm2: vm2 Sandbox Escape',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'Trivy',
-      description: 'General sandbox breakout vulnerability.',
-      fixed_version: '3.11.6',
-      package_name: 'vm2',
-      package_version: '3.9.13',
-      cve_id: 'GHSA-c374-kw89-6147',
-      risk_score: 80,
-      priority: 'P1',
-      verification_status: 'resolved',
-    },
-    {
-      id: 'f-8',
-      title: 'Hardcoded AWS Access Key ID detected',
-      category: 'secret',
-      severity: 'CRITICAL',
-      file_path: 'config/aws.py',
-      scanner: 'Gitleaks',
-      description: 'Plaintext AWS credentials committed to source tree.',
-      evidence: 'AKIAIOSFODNN7EXAMPLE',
-      risk_score: 90,
-      priority: 'P1',
-      verification_status: 'unresolved',
-    },
-    {
-      id: 'f-9',
-      title: 'Container process executes with root privileges',
-      category: 'misconfiguration',
-      severity: 'HIGH',
-      file_path: 'Dockerfile',
-      scanner: 'Trivy',
-      description: 'Root user specified in container definition allows potential container escape.',
-      risk_score: 70,
-      priority: 'P2',
-      verification_status: 'resolved',
-    },
-  ]
-
-  const rawList: Finding[] = (findings.length > 0 ? findings : defaultList) as any as Finding[]
-
-  const filtered = rawList.filter((f) => {
-    if (activeTab === 'open' && f.verification_status === 'resolved') return false
-    if (activeTab === 'resolved' && f.verification_status !== 'resolved') return false
-
-    if (selectedSeverity !== 'all' && f.severity !== selectedSeverity) return false
-    if (selectedCategory !== 'all' && f.category !== selectedCategory) return false
-    if (selectedRepo !== 'all' && f.scanner !== selectedRepo) return false
-
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      const matchTitle = f.title.toLowerCase().includes(q)
-      const matchFile = f.file_path?.toLowerCase().includes(q)
-      const matchCve = f.cve_id?.toLowerCase().includes(q)
-      if (!matchTitle && !matchFile && !matchCve) return false
+    } else {
+      setSearchParams({ scan: newScanId })
+      getFindings(newScanId).then((res) => setFindings(res.data.findings || []))
     }
+  }
 
-    return true
-  })
+  // Filter and sort findings
+  const filteredFindings = useMemo(() => {
+    return findings
+      .filter((f) => {
+        // Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase()
+          const matchTitle = f.title?.toLowerCase().includes(q)
+          const matchFile = f.file_path?.toLowerCase().includes(q)
+          const matchCve = f.cve_id?.toLowerCase().includes(q)
+          const matchScanner = f.scanner?.toLowerCase().includes(q)
+          if (!matchTitle && !matchFile && !matchCve && !matchScanner) return false
+        }
+
+        // Severity filter
+        if (selectedSeverity !== 'all') {
+          if (f.severity?.toUpperCase() !== selectedSeverity.toUpperCase()) return false
+        }
+
+        // Category filter
+        if (selectedCategory !== 'all') {
+          const cat = f.category?.toLowerCase()
+          if (selectedCategory === 'secret' && cat !== 'secret') return false
+          if (selectedCategory === 'dependency' && cat !== 'dependency') return false
+          if (selectedCategory === 'sast' && !['sast', 'code'].includes(cat)) return false
+          if (selectedCategory === 'misconfig' && !['misconfiguration', 'iac'].includes(cat)) return false
+        }
+
+        // Status filter
+        if (selectedStatus !== 'all') {
+          const isResolved = (f.verification_status || '').toLowerCase() === 'resolved' || f.status === 'resolved'
+          if (selectedStatus === 'resolved' && !isResolved) return false
+          if (selectedStatus === 'open' && isResolved) return false
+        }
+
+        return true
+      })
+      .sort((a, b) => {
+        const sevWeight: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }
+        if (sortBy === 'severity') {
+          const diff = (sevWeight[b.severity?.toUpperCase()] || 0) - (sevWeight[a.severity?.toUpperCase()] || 0)
+          return sortOrder === 'desc' ? diff : -diff
+        }
+        if (sortBy === 'risk') {
+          const diff = (b.risk_score || 0) - (a.risk_score || 0)
+          return sortOrder === 'desc' ? diff : -diff
+        }
+        if (sortBy === 'title') {
+          return sortOrder === 'desc'
+            ? b.title.localeCompare(a.title)
+            : a.title.localeCompare(b.title)
+        }
+        return 0
+      })
+  }, [findings, searchQuery, selectedSeverity, selectedCategory, selectedStatus, sortBy, sortOrder])
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto space-y-7">
-        {/* Header */}
+      <div className="space-y-6 max-w-[1440px] mx-auto">
+        {/* TOP HEADER */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              Controlled fixtures, real scan evidence.
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">
+              <Shield className="w-3.5 h-3.5" />
+              Vulnerability Inventory & Explorer
             </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              Findings
+            <h1 className="text-3xl font-extrabold text-white tracking-tight">
+              Findings Explorer
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Real scanner evidence, organized by what matters most.
+            <p className="text-sm text-slate-400 mt-1">
+              Search, filter, and inspect verified vulnerabilities across exposed secrets, dependencies, SAST code, and configurations.
             </p>
           </div>
 
-          <button onClick={openScanModal} className="btn-primary text-xs font-bold px-4 py-2">
-            <Plus className="w-4 h-4" />
-            <span>New scan</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={loadData}
+              className="btn-secondary text-xs py-2 px-3 flex items-center gap-2"
+              title="Refresh findings"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <Link to="/upload" className="btn-primary text-xs py-2 px-4 flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>New Scan</span>
+            </Link>
+          </div>
         </div>
 
-        {/* Tabs Bar & Export Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eaecf0] pb-3 select-none">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('open')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'open'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>Open</span>
-              <span className="text-[10px] font-mono opacity-80">107</span>
-            </button>
+        {/* CONTROLS BAR: Project Selector, Search, and Filters */}
+        <div className="card p-4 space-y-3">
+          <div className="flex flex-col md:flex-row items-center gap-3">
+            {/* Scan / Project Selector */}
+            <div className="w-full md:w-64 flex-shrink-0">
+              <select
+                value={selectedScanId}
+                onChange={(e) => handleScanChange(e.target.value)}
+                className="w-full bg-[#181d2a] border border-[#26314d] text-xs font-semibold text-white rounded-xl px-3 py-2.5 outline-none focus:border-blue-500"
+              >
+                {scans.length === 0 ? (
+                  <option value="none">No scans available</option>
+                ) : (
+                  scans.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.project_name} ({s.scan_type || 'scan'}) — {s.total_findings} findings
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
 
-            <button
-              onClick={() => setActiveTab('resolved')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'resolved'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>Resolved</span>
-              <span className="text-[10px] font-mono opacity-80">51</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'all'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>All findings</span>
-              <span className="text-[10px] font-mono opacity-80">158</span>
-            </button>
+            {/* Search Input */}
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search findings by title, file, CVE, or detection scanner..."
+                className="w-full bg-[#181d2a] border border-[#26314d] rounded-xl pl-10 pr-8 py-2 text-xs text-white placeholder-slate-400 outline-none focus:border-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
-          <button
-            onClick={() => toast.success('Exporting filtered findings as CSV/JSON...')}
-            className="btn-secondary text-xs font-semibold px-3 py-1.5 self-start sm:self-auto"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export findings</span>
-          </button>
-        </div>
+          {/* Quick Filter Pills */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#1f2638] text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-400 font-semibold flex items-center gap-1 mr-1">
+                <Filter className="w-3.5 h-3.5" /> Filters:
+              </span>
 
-        {/* Filter Dropdowns Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-          <div className="relative sm:col-span-1">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search findings, files, or rules..."
-              className="w-full bg-white border border-[#eaecf0] focus:border-[#ea580c] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none transition shadow-sm"
-            />
+              {/* Severity Filter */}
+              <select
+                value={selectedSeverity}
+                onChange={(e) => setSelectedSeverity(e.target.value)}
+                className="bg-[#181d2a] border border-[#26314d] rounded-lg px-2.5 py-1 text-slate-300 text-xs font-medium outline-none"
+              >
+                <option value="all">All Severities</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+
+              {/* Category Filter */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="bg-[#181d2a] border border-[#26314d] rounded-lg px-2.5 py-1 text-slate-300 text-xs font-medium outline-none"
+              >
+                <option value="all">All Categories</option>
+                <option value="secret">Exposed Secrets</option>
+                <option value="dependency">Dependencies</option>
+                <option value="sast">Insecure Code (SAST)</option>
+                <option value="misconfig">Misconfigurations</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="bg-[#181d2a] border border-[#26314d] rounded-lg px-2.5 py-1 text-slate-300 text-xs font-medium outline-none"
+              >
+                <option value="all">All Statuses</option>
+                <option value="open">Open / Unresolved</option>
+                <option value="resolved">Verified / Resolved</option>
+              </select>
+            </div>
+
+            {/* Sorting */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-semibold">Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-[#181d2a] border border-[#26314d] rounded-lg px-2.5 py-1 text-slate-300 text-xs font-medium outline-none"
+              >
+                <option value="risk">Risk Score</option>
+                <option value="severity">Severity Level</option>
+                <option value="title">Title (A-Z)</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="p-1 rounded bg-[#181d2a] border border-[#26314d] text-slate-400 hover:text-white"
+                title={`Order: ${sortOrder.toUpperCase()}`}
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-
-          <select
-            value={selectedRepo}
-            onChange={(e) => setSelectedRepo(e.target.value)}
-            className="bg-white border border-[#eaecf0] rounded-xl px-3 py-2 text-slate-700 outline-none focus:border-[#ea580c] font-medium shadow-sm"
-          >
-            <option value="all">All repositories</option>
-            <option value="auth-service">auth-service</option>
-            <option value="dashboard-ui">dashboard-ui</option>
-            <option value="ecommerce-api">ecommerce-api</option>
-            <option value="infrastructure">infrastructure</option>
-          </select>
-
-          <select
-            value={selectedSeverity}
-            onChange={(e) => setSelectedSeverity(e.target.value)}
-            className="bg-white border border-[#eaecf0] rounded-xl px-3 py-2 text-slate-700 outline-none focus:border-[#ea580c] font-medium shadow-sm"
-          >
-            <option value="all">All severities</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
-
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-white border border-[#eaecf0] rounded-xl px-3 py-2 text-slate-700 outline-none focus:border-[#ea580c] font-medium shadow-sm"
-          >
-            <option value="all">All categories</option>
-            <option value="secret">Exposed secrets</option>
-            <option value="dependency">Dependencies</option>
-            <option value="misconfiguration">Misconfigurations</option>
-          </select>
         </div>
 
-        {/* Findings Table */}
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto text-xs">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-[#eaecf0]">
-                <tr>
-                  <th className="py-3 px-5 w-8">
-                    <input type="checkbox" className="rounded border-slate-300" />
-                  </th>
-                  <th className="py-3 px-5">Finding</th>
-                  <th className="py-3 px-5">Severity</th>
-                  <th className="py-3 px-5">Repository</th>
-                  <th className="py-3 px-5">Source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#eaecf0]">
-                {filtered.map((f) => {
-                  const isCrit = f.severity === 'CRITICAL'
-                  const isHigh = f.severity === 'HIGH'
-                  const badgeClass = isCrit ? 'badge-critical' : isHigh ? 'badge-high' : 'badge-medium'
+        {/* FINDINGS TABLE OR EMPTY STATE */}
+        {filteredFindings.length === 0 ? (
+          <div className="card p-12 text-center space-y-4 border-dashed border-[#26314d]">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">No Vulnerabilities Match Filter</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                {findings.length === 0
+                  ? 'No scan findings in the database. Run a security scan to populate results.'
+                  : 'Try clearing your search query or adjusting the severity and category filters.'}
+              </p>
+            </div>
+            {findings.length === 0 && (
+              <Link to="/upload" className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-2">
+                <Plus className="w-3.5 h-3.5" /> Start New Scan
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="px-6 py-3 bg-[#151926] border-b border-[#212738] flex items-center justify-between text-xs text-slate-400">
+              <span>Showing <strong>{filteredFindings.length}</strong> findings</span>
+              <span className="font-mono text-[11px]">Click any finding row to open detailed security dossier</span>
+            </div>
 
-                  return (
-                    <tr
-                      key={f.id}
-                      onClick={() => openDrawer(f)}
-                      className="hover:bg-slate-50/70 transition cursor-pointer"
-                    >
-                      <td className="py-3.5 px-5" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" className="rounded border-slate-300" />
-                      </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#181d2a] text-slate-400 uppercase text-[10px] tracking-wider border-b border-[#212738]">
+                  <tr>
+                    <th className="py-3 px-6 font-bold">Severity</th>
+                    <th className="py-3 px-6 font-bold">Vulnerability Title</th>
+                    <th className="py-3 px-6 font-bold">Category</th>
+                    <th className="py-3 px-6 font-bold">File & Line</th>
+                    <th className="py-3 px-6 font-bold">Detection Tool</th>
+                    <th className="py-3 px-6 font-bold">Status</th>
+                    <th className="py-3 px-6 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1f2638]">
+                  {filteredFindings.map((f) => {
+                    const isResolved = (f.verification_status || '').toLowerCase() === 'resolved' || f.status === 'resolved'
 
-                      <td className="py-3.5 px-5 max-w-lg">
-                        <div className="font-bold text-slate-900 leading-snug line-clamp-1 hover:text-[#ea580c] transition">
-                          {f.title}
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
-                          <span className="text-slate-600 font-medium">{f.scanner || 'auth-service'}</span>
-                          <span>•</span>
-                          <span className="font-mono">{f.file_path || 'package-lock.json'}</span>
-                          {f.verification_status === 'resolved' ? (
-                            <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded text-[10px] font-bold">
-                              ✓ Verified Resolved
-                            </span>
-                          ) : (
-                            <span className="text-[#ea580c] bg-[#fff7ed] px-1.5 py-0.2 rounded text-[10px] font-semibold">
-                              New in verification
+                    return (
+                      <tr
+                        key={f.id}
+                        onClick={() => openDrawer(f)}
+                        className="hover:bg-[#161b2a] transition cursor-pointer group"
+                      >
+                        {/* Severity Badge */}
+                        <td className="py-3.5 px-6 whitespace-nowrap">
+                          <SeverityBadge severity={f.severity} />
+                        </td>
+
+                        {/* Title & CVE */}
+                        <td className="py-3.5 px-6">
+                          <div className="font-bold text-white group-hover:text-blue-400 transition leading-snug line-clamp-2">
+                            {f.title}
+                          </div>
+                          {f.cve_id && (
+                            <span className="inline-block mt-1 text-[10px] font-mono text-slate-400 bg-[#0c0e14] px-1.5 py-0.5 rounded border border-[#212738]">
+                              {f.cve_id}
                             </span>
                           )}
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3.5 px-5">
-                        <span className={badgeClass}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                          {f.severity.charAt(0) + f.severity.slice(1).toLowerCase()}
-                        </span>
-                      </td>
+                        {/* Category */}
+                        <td className="py-3.5 px-6 whitespace-nowrap">
+                          <span className="capitalize text-slate-300 font-medium px-2 py-0.5 rounded bg-[#1b2234] border border-[#26314d]">
+                            {f.category}
+                          </span>
+                        </td>
 
-                      <td className="py-3.5 px-5 font-medium text-slate-600">
-                        {f.scanner || 'auth-service'}
-                      </td>
+                        {/* Affected File & Line */}
+                        <td className="py-3.5 px-6 font-mono text-[11px] text-slate-300">
+                          {f.file_path ? (
+                            <div className="flex items-center gap-1.5 truncate max-w-xs">
+                              <FileCode className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                              <span className="truncate" title={f.file_path}>{f.file_path}</span>
+                              {f.line_number && (
+                                <span className="text-slate-500">:{f.line_number}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500">Project level</span>
+                          )}
+                        </td>
 
-                      <td className="py-3.5 px-5">
-                        <div className="text-slate-700 font-semibold">{f.scanner || 'Trivy'}</div>
-                        {f.cve_id && (
-                          <div className="text-[10px] font-mono text-slate-400 hover:text-blue-500">
-                            {f.cve_id}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        {/* Scanner Engine */}
+                        <td className="py-3.5 px-6 whitespace-nowrap font-semibold text-slate-300">
+                          {f.scanner || 'RepoGuard'}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-6 whitespace-nowrap">
+                          {isResolved ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold text-green-400 bg-green-500/10 border border-green-500/30">
+                              <CheckCircle2 className="w-3 h-3" /> Resolved
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30">
+                              <AlertTriangle className="w-3 h-3" /> Open
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openDrawer(f)
+                            }}
+                            className="text-xs font-semibold text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
+                          >
+                            Details <ExternalLink className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Layout>
   )

@@ -5,7 +5,7 @@ import shutil
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.config import settings
 from app.models.scan import Scan, ScanStatus
 from app.models.finding import Finding
@@ -66,6 +66,7 @@ async def upload_and_scan(
         "gitleaks_done": False,
         "trivy_done": False,
         "osv_done": False,
+        "semgrep_done": False,
         "findings_count": 0,
     }
 
@@ -99,112 +100,109 @@ async def get_overview_metrics(db: Session = Depends(get_db)):
     scans = db.query(Scan).order_by(Scan.created_at.desc()).all()
     findings = db.query(Finding).all()
 
-    # If DB is fresh/empty or has default test scans, calculate live metrics
+    total_scans = len(scans)
+    has_scans = total_scans > 0
+
+    if not has_scans:
+        return {
+            "has_scans": False,
+            "total_scans": 0,
+            "repositories_count": 0,
+            "open_findings": 0,
+            "total_vulnerabilities": 0,
+            "critical_issues": 0,
+            "high_issues": 0,
+            "medium_issues": 0,
+            "low_issues": 0,
+            "verified_fixes": 0,
+            "unresolved_vulnerabilities": 0,
+            "security_posture": 100,
+            "security_posture_status": "No scans yet",
+            "score_calculation": "Score = max(0, 100 - (15×Critical + 8×High + 3×Medium + 1×Low) + 3×Resolved)",
+            "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "by_category": {"Secrets": 0, "Dependencies": 0, "Insecure Code": 0, "Misconfigurations": 0},
+            "posture_trend": [],
+            "repositories": [],
+            "priority_findings": [],
+        }
+
     repos_set = set(s.project_name for s in scans if s.project_name)
-    repos_count = max(4, len(repos_set))
+    repos_count = len(repos_set)
 
     open_findings = sum(1 for f in findings if (f.verification_status or "unresolved") != "resolved")
-    verified_fixes = sum(1 for f in findings if (f.verification_status or "") == "resolved")
-    
-    # If fresh database with few records, align baseline with reference fixtures (107 open, 34 critical, etc.)
-    if open_findings == 0:
-        open_findings = 107
-        verified_fixes = 51
-        critical_count = 34
-        high_count = 39
-        medium_count = 25
-        low_count = 9
+    verified_fixes = sum(1 for f in findings if (f.verification_status or "") == "resolved" or f.status == "resolved")
+
+    critical_count = sum(1 for f in findings if (f.severity or "").upper() == "CRITICAL" and (f.verification_status or "") != "resolved")
+    high_count = sum(1 for f in findings if (f.severity or "").upper() == "HIGH" and (f.verification_status or "") != "resolved")
+    medium_count = sum(1 for f in findings if (f.severity or "").upper() == "MEDIUM" and (f.verification_status or "") != "resolved")
+    low_count = sum(1 for f in findings if (f.severity or "").upper() == "LOW" and (f.verification_status or "") != "resolved")
+
+    # Documented transparent security posture score calculation:
+    # Baseline: 100 points
+    # Penalties: Critical: -15, High: -8, Medium: -3, Low: -1
+    # Rewards: Verified remediation bonus: +3 per verified fix (up to +15)
+    deductions = (critical_count * 15) + (high_count * 8) + (medium_count * 3) + (low_count * 1)
+    bonus = min(15, verified_fixes * 3)
+    posture_score = max(0, min(100, 100 - deductions + bonus))
+
+    if posture_score >= 85:
+        posture_status = "Good"
+    elif posture_score >= 60:
+        posture_status = "Needs attention"
     else:
-        critical_count = sum(1 for f in findings if f.severity == "CRITICAL" and (f.verification_status or "") != "resolved")
-        high_count = sum(1 for f in findings if f.severity == "HIGH" and (f.verification_status or "") != "resolved")
-        medium_count = sum(1 for f in findings if f.severity == "MEDIUM" and (f.verification_status or "") != "resolved")
-        low_count = sum(1 for f in findings if f.severity == "LOW" and (f.verification_status or "") != "resolved")
-        # Ensure minimum counts for demo clarity
-        if critical_count == 0 and open_findings > 0:
-            critical_count = max(1, int(open_findings * 0.3))
-        if high_count == 0 and open_findings > 0:
-            high_count = max(1, int(open_findings * 0.35))
-        if medium_count == 0 and open_findings > 0:
-            medium_count = max(1, int(open_findings * 0.25))
-        if low_count == 0 and open_findings > 0:
-            low_count = max(1, open_findings - (critical_count + high_count + medium_count))
+        posture_status = "At risk"
 
-    posture_score = max(15, min(95, 100 - int(critical_count * 1.4 + high_count * 0.8 + medium_count * 0.4)))
+    # Category distribution
+    cat_counts = {
+        "Secrets": sum(1 for f in findings if (f.category or "").lower() == "secret"),
+        "Dependencies": sum(1 for f in findings if (f.category or "").lower() == "dependency"),
+        "Insecure Code": sum(1 for f in findings if (f.category or "").lower() in ("sast", "code")),
+        "Misconfigurations": sum(1 for f in findings if (f.category or "").lower() in ("misconfiguration", "iac")),
+    }
 
-    trend = [
-        {"name": "Baseline", "findings": 38},
-        {"name": "Rescan 1", "findings": 37},
-        {"name": "Rescan 2", "findings": 36},
-        {"name": "Rescan 3", "findings": 47},
-        {"name": "Rescan 4", "findings": 44},
-        {"name": "Rescan 5", "findings": 42},
-        {"name": "Rescan 6", "findings": 42},
-        {"name": "Rescan 7", "findings": 7},
-    ]
+    # Trend from chronological scans
+    trend = []
+    chronological_scans = list(reversed(scans))
+    for i, s in enumerate(chronological_scans):
+        label = s.project_name if len(chronological_scans) <= 3 else f"Scan {i+1}"
+        trend.append({
+            "name": label,
+            "findings": s.total_findings or 0,
+            "critical": s.critical_count or 0,
+            "scan_id": s.id,
+        })
 
-    repositories_list = [
-        {
-            "name": "auth-service",
-            "lang": "TypeScript",
-            "branch": "develop",
-            "status": "At risk",
-            "status_type": "critical",
-            "findings": 65,
-            "bar": {"crit": "52%", "high": "26%", "med": "18%"},
-            "last_scan": "Nov 1, 10:48",
-        },
-        {
-            "name": "dashboard-ui",
-            "lang": "JavaScript",
-            "branch": "main",
-            "status": "Needs attention",
-            "status_type": "high",
-            "findings": 28,
-            "bar": {"crit": "0%", "high": "50%", "med": "50%"},
-            "last_scan": "Nov 1, 10:47",
-        },
-        {
-            "name": "ecommerce-api",
-            "lang": "TypeScript",
-            "branch": "main",
-            "status": "Needs attention",
-            "status_type": "high",
-            "findings": 3,
-            "bar": {"crit": "0%", "high": "66%", "med": "34%"},
-            "last_scan": "Nov 1, 10:48",
-        },
-        {
-            "name": "infrastructure",
-            "lang": "Other",
-            "branch": "main",
-            "status": "Needs attention",
-            "status_type": "high",
-            "findings": 11,
-            "bar": {"crit": "0%", "high": "55%", "med": "45%"},
-            "last_scan": "Nov 1, 10:47",
-        },
-    ]
-
-    # Prepend any newly uploaded repository from scans
+    # Repositories list from real scans
+    repositories_list = []
+    repo_scans: dict = {}
     for s in scans:
-        if s.project_name and not any(r["name"] == s.project_name for r in repositories_list):
-            repositories_list.insert(0, {
-                "name": s.project_name,
-                "lang": "Python/Polyglot",
-                "branch": "main",
-                "status": "At risk" if s.critical_count > 0 else "Needs attention",
-                "status_type": "critical" if s.critical_count > 0 else "high",
-                "findings": s.total_findings,
-                "bar": {
-                    "crit": f"{int((s.critical_count / max(1, s.total_findings)) * 100)}%",
-                    "high": f"{int((s.high_count / max(1, s.total_findings)) * 100)}%",
-                    "med": f"{int((s.medium_count / max(1, s.total_findings)) * 100)}%",
-                },
-                "last_scan": "Just now",
-            })
+        if s.project_name not in repo_scans:
+            repo_scans[s.project_name] = s
 
+    for name, s in repo_scans.items():
+        total = s.total_findings or 0
+        crit = s.critical_count or 0
+        high = s.high_count or 0
+        med = s.medium_count or 0
+        repositories_list.append({
+            "id": s.id,
+            "name": name,
+            "lang": "Polyglot",
+            "branch": "main",
+            "status": "At risk" if crit > 0 else ("Needs attention" if high > 0 else "Good"),
+            "status_type": "critical" if crit > 0 else ("high" if high > 0 else "good"),
+            "findings": total,
+            "bar": {
+                "crit": f"{int((crit / max(1, total)) * 100)}%",
+                "high": f"{int((high / max(1, total)) * 100)}%",
+                "med": f"{int((med / max(1, total)) * 100)}%",
+            },
+            "last_scan": s.created_at.strftime("%b %d, %H:%M") if s.created_at else "Recent",
+        })
+
+    # Top priority findings
     priority_findings = []
-    top_findings = db.query(Finding).order_by(Finding.risk_score.desc()).limit(3).all()
+    top_findings = db.query(Finding).order_by(Finding.risk_score.desc()).limit(5).all()
     for f in top_findings:
         priority_findings.append({
             "id": f.id,
@@ -222,24 +220,32 @@ async def get_overview_metrics(db: Session = Depends(get_db)):
         })
 
     return {
+        "has_scans": True,
+        "total_scans": total_scans,
         "repositories_count": repos_count,
         "open_findings": open_findings,
+        "total_vulnerabilities": len(findings),
         "critical_issues": critical_count,
+        "high_issues": high_count,
+        "medium_issues": medium_count,
+        "low_issues": low_count,
         "verified_fixes": verified_fixes,
+        "unresolved_vulnerabilities": open_findings,
         "security_posture": posture_score,
-        "security_posture_status": "Needs attention" if posture_score < 75 else "Good",
-        "reduction_text": "36 fewer findings",
-        "reduction_subtext": "across verified fixture rescans",
+        "security_posture_status": posture_status,
+        "score_calculation": "Score = max(0, 100 - (15×Critical + 8×High + 3×Medium + 1×Low) + 3×Resolved)",
         "by_severity": {
             "critical": critical_count,
             "high": high_count,
             "medium": medium_count,
             "low": low_count,
         },
+        "by_category": cat_counts,
         "posture_trend": trend,
         "repositories": repositories_list,
         "priority_findings": priority_findings,
     }
+
 
 
 
@@ -255,12 +261,54 @@ async def get_scan(scan_id: str, db: Session = Depends(get_db)):
 async def get_progress(scan_id: str):
     async def event_generator():
         while True:
-            progress = scan_progress.get(scan_id, {
-                "status": "pending", "progress": 0,
-                "current_step": "Waiting...",
-                "gitleaks_done": False, "trivy_done": False, "osv_done": False,
-                "findings_count": 0,
-            })
+            progress = scan_progress.get(scan_id)
+
+            # Check database for definitive state if progress is pending, missing, or to verify completion
+            if not progress or progress.get("status") in ("pending", None):
+                try:
+                    with SessionLocal() as db:
+                        scan = db.query(Scan).filter(Scan.id == scan_id).first()
+                        if scan:
+                            if scan.status == ScanStatus.COMPLETED or str(scan.status).lower().endswith("completed"):
+                                progress = {
+                                    "status": "completed",
+                                    "progress": 100,
+                                    "current_step": "Scan complete!",
+                                    "gitleaks_done": True,
+                                    "trivy_done": True,
+                                    "osv_done": True,
+                                    "semgrep_done": True,
+                                    "findings_count": scan.total_findings or 0,
+                                }
+                                scan_progress[scan_id] = progress
+                            elif scan.status == ScanStatus.FAILED or str(scan.status).lower().endswith("failed"):
+                                progress = {
+                                    "status": "failed",
+                                    "progress": 0,
+                                    "current_step": f"Scan failed: {scan.error_message or 'Unknown error'}",
+                                    "error": scan.error_message or "Unknown error",
+                                    "gitleaks_done": False,
+                                    "trivy_done": False,
+                                    "osv_done": False,
+                                    "semgrep_done": False,
+                                    "findings_count": 0,
+                                }
+                                scan_progress[scan_id] = progress
+                except Exception as e:
+                    logger.warning(f"Error checking DB in get_progress: {e}")
+
+            if not progress:
+                progress = {
+                    "status": "pending",
+                    "progress": 10,
+                    "current_step": "Initializing scanners...",
+                    "gitleaks_done": False,
+                    "trivy_done": False,
+                    "osv_done": False,
+                    "semgrep_done": False,
+                    "findings_count": 0,
+                }
+
             yield f"data: {json.dumps(progress)}\n\n"
             if progress.get("status") in ("completed", "failed"):
                 break
@@ -293,17 +341,25 @@ def _serialize_scan(s: Scan) -> dict:
     }
 
 
-async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session):
+async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session = None):
+    local_db = SessionLocal()
     orchestrator = ScanOrchestrator()
     project_path = None
 
     def upd(status, step, progress, **kw):
+        if scan_id not in scan_progress:
+            scan_progress[scan_id] = {}
         scan_progress[scan_id].update({"status": status, "current_step": step, "progress": progress, **kw})
 
     try:
-        scan = db.query(Scan).filter(Scan.id == scan_id).first()
+        scan = local_db.query(Scan).filter(Scan.id == scan_id).first()
+        if not scan:
+            logger.error(f"Scan {scan_id} not found in DB")
+            upd("failed", "Scan not found", 0, error="Scan not found")
+            return
+
         scan.status = ScanStatus.SCANNING
-        db.commit()
+        local_db.commit()
 
         upd("scanning", "Extracting project files...", 10)
         project_path = await orchestrator.extract_project(zip_path)
@@ -314,6 +370,7 @@ async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session):
         scan_progress[scan_id]["gitleaks_done"] = getattr(scanner_results.get("gitleaks"), "success", False)
         scan_progress[scan_id]["trivy_done"] = getattr(scanner_results.get("trivy"), "success", False)
         scan_progress[scan_id]["osv_done"] = getattr(scanner_results.get("osv"), "success", False)
+        scan_progress[scan_id]["semgrep_done"] = getattr(scanner_results.get("semgrep"), "success", False)
 
         upd("processing", "Normalizing and processing findings...", 60)
 
@@ -346,7 +403,7 @@ async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session):
                 fingerprint=fd.get("fingerprint"),
                 status="open",
             )
-            db.add(finding)
+            local_db.add(finding)
 
         by_sev: dict = {}
         for fd in prioritized:
@@ -365,7 +422,7 @@ async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session):
         if errs:
             scan.scanner_errors = errs
 
-        db.commit()
+        local_db.commit()
         upd("completed", "Scan complete!", 100, findings_count=len(prioritized))
 
         try:
@@ -375,13 +432,20 @@ async def run_scan_pipeline(scan_id: str, zip_path: str, db: Session):
 
     except Exception as e:
         logger.error(f"Scan failed {scan_id}: {e}", exc_info=True)
-        scan = db.query(Scan).filter(Scan.id == scan_id).first()
-        if scan:
-            scan.status = ScanStatus.FAILED
-            scan.error_message = str(e)
-            db.commit()
+        try:
+            scan = local_db.query(Scan).filter(Scan.id == scan_id).first()
+            if scan:
+                scan.status = ScanStatus.FAILED
+                scan.error_message = str(e)
+                local_db.commit()
+        except Exception:
+            pass
         upd("failed", f"Scan failed: {e}", 0, error=str(e))
     finally:
+        try:
+            local_db.close()
+        except Exception:
+            pass
         if project_path and os.path.exists(project_path):
             orchestrator.cleanup_project(project_path)
 

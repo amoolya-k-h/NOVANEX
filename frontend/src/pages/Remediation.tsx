@@ -1,234 +1,213 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   Wrench, CheckCircle, AlertTriangle, ArrowRight, ShieldCheck,
-  FileCheck2, Plus, Sparkles, ChevronDown, Check
+  FileCheck2, Plus, Sparkles, ChevronDown, Check, FileCode, ExternalLink, RefreshCw
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useScanStore } from '../store/useScanStore'
+import { getFindings, listScans } from '../api/client'
 import { Finding } from '../types'
+import { SeverityBadge } from '../components/SeverityBadge'
+import CodeRemediationStudio from '../components/CodeRemediationStudio'
 
 export default function Remediation() {
-  const { openScanModal, openDrawer, findings } = useScanStore()
-  const [subTab, setSubTab] = useState<'needs_review' | 'verified' | 'newly_introduced'>('needs_review')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const findingIdFromUrl = searchParams.get('finding')
 
-  const defaultItems = [
-    {
-      id: 'rem-1',
-      title: "vm2: vm2 NodeVM builtin '[]' exposes 'os' and 'dns' — process-wide observability reads AND writes that hijack the host (sibling class of GHSA-9g8x-92q2-p28f)",
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      cve_id: 'GHSA-9g8x-92q2-p28f',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-    {
-      id: 'rem-2',
-      title: 'vm2: vm2 NodeVM before 3.12.1 Remote Code Execution via child_process',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      cve_id: 'CVE-2023-37466',
-      status: 'needs_review',
-      fixed_version: '3.12.1',
-    },
-    {
-      id: 'rem-3',
-      title: 'vm2: vm2 Sandbox Breakout Using Dangerous Host Proto Mutators',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-    {
-      id: 'rem-4',
-      title: 'vm2: vm2; Missing ErrorCase Sanitization Enables VM2 Sandbox Escape to RCE',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-    {
-      id: 'rem-5',
-      title: 'vm2: vm2: Arbitrary code execution using Promise Sandbox Escape when executing untrusted code with async support',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-    {
-      id: 'rem-6',
-      title: 'vm2: Arbitrary code execution due to incomplete sandbox restrictions',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-    {
-      id: 'rem-7',
-      title: 'vm2: sandbox escape leading to arbitrary code execution via security bypass',
-      category: 'dependency',
-      severity: 'CRITICAL',
-      file_path: 'package-lock.json',
-      scanner: 'auth-service',
-      status: 'needs_review',
-      fixed_version: '3.11.6',
-    },
-  ]
+  const { findings, setFindings, scans, setScans } = useScanStore()
+  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [subTab, setSubTab] = useState<'needs_review' | 'remediated' | 'verified'>('needs_review')
 
-  const items = findings.length > 0 ? (findings as any) : defaultItems
+  useEffect(() => {
+    if (findings.length === 0) {
+      setLoading(true)
+      listScans()
+        .then((sRes) => {
+          const scanList = sRes.data || []
+          setScans(scanList)
+          if (scanList.length > 0) {
+            return getFindings(scanList[0].id).then((fRes) => {
+              const fList = fRes.data.findings || []
+              setFindings(fList)
+              if (fList.length > 0) {
+                const match = findingIdFromUrl ? fList.find((f: any) => f.id === findingIdFromUrl) : fList[0]
+                setSelectedFinding(match || fList[0])
+              }
+            })
+          }
+        })
+        .finally(() => setLoading(false))
+    } else {
+      const match = findingIdFromUrl
+        ? findings.find((f) => f.id === findingIdFromUrl)
+        : findings[0]
+      setSelectedFinding(match || findings[0])
+    }
+  }, [findingIdFromUrl, findings.length])
+
+  const needsReviewItems = findings.filter(
+    (f) => f.status !== 'remediated' && (f.verification_status || '') !== 'resolved'
+  )
+  const remediatedItems = findings.filter(
+    (f) => f.status === 'remediated' || (f.verification_status || '') === 'pending_verification'
+  )
+  const verifiedItems = findings.filter(
+    (f) => (f.verification_status || '').toLowerCase() === 'resolved' || f.status === 'resolved'
+  )
+
+  const activeList =
+    subTab === 'needs_review'
+      ? needsReviewItems
+      : subTab === 'remediated'
+      ? remediatedItems
+      : verifiedItems
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto space-y-7">
+      <div className="max-w-[1440px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              Controlled fixtures, real scan evidence.
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">
+              <Wrench className="w-3.5 h-3.5" />
+              AI Code Remediation & Patch Approval
             </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              Remediation
+            <h1 className="text-3xl font-extrabold text-white tracking-tight">
+              Remediation Studio
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Review the fix. Make the change. Verify the result.
+            <p className="text-sm text-slate-400 mt-1">
+              Review AI-generated diffs, download unified patches, and approve safe code modifications prior to verification.
             </p>
           </div>
 
-          <button onClick={openScanModal} className="btn-primary text-xs font-bold px-4 py-2">
-            <Plus className="w-4 h-4" />
-            <span>New scan</span>
-          </button>
-        </div>
-
-        {/* 3 Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="card p-5 space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Ready for review</span>
-              <FileCheck2 className="w-4 h-4 text-[#ea580c]" />
-            </div>
-            <div className="text-3xl font-extrabold text-slate-900 tracking-tight">107</div>
-          </div>
-
-          <div className="card p-5 space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Verified resolutions</span>
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="text-3xl font-extrabold text-emerald-600 tracking-tight">51</div>
-          </div>
-
-          <div className="card p-5 space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Newly introduced</span>
-              <AlertTriangle className="w-4 h-4 text-red-500" />
-            </div>
-            <div className="text-3xl font-extrabold text-red-600 tracking-tight">57</div>
+          <div className="flex items-center gap-3">
+            <Link to="/verification" className="btn-secondary text-xs py-2 px-3 flex items-center gap-2">
+              <CheckCircle className="w-3.5 h-3.5 text-green-400" />
+              <span>Verify Applied Fixes</span>
+            </Link>
           </div>
         </div>
 
-        {/* You're In Control Alert Box */}
-        <div className="card p-5 bg-[#fff7ed] border-[#ffedd5] flex items-start gap-3.5 text-xs text-slate-700 leading-relaxed">
-          <Check className="w-4 h-4 text-[#ea580c] flex-shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-bold text-[#c2410c] mb-0.5">You're in control.</h4>
-            <p>
-              Proposed changes are never applied silently. Upload your own ZIP, review supported edits here, approve selected changes, and download a separate archive. Actual rescans—not applied edits—verify the result.
+        {findings.length === 0 && !loading ? (
+          <div className="card p-12 text-center space-y-4 border-dashed border-[#26314d]">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+              <Wrench className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-white">No Vulnerabilities Available to Remediate</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Run a security scan to detect issues and unlock automated AI code patch suggestions.
             </p>
+            <Link to="/upload" className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-2">
+              <Plus className="w-3.5 h-3.5" /> Start Scan
+            </Link>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT COLUMN: Findings Queue */}
+            <div className="lg:col-span-4 space-y-3">
+              {/* Filter Tabs */}
+              <div className="card p-1.5 flex items-center gap-1 bg-[#151926]">
+                <button
+                  onClick={() => setSubTab('needs_review')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition text-center ${
+                    subTab === 'needs_review'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Open ({needsReviewItems.length})
+                </button>
+                <button
+                  onClick={() => setSubTab('remediated')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition text-center ${
+                    subTab === 'remediated'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Patched ({remediatedItems.length})
+                </button>
+                <button
+                  onClick={() => setSubTab('verified')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition text-center ${
+                    subTab === 'verified'
+                      ? 'bg-green-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Verified ({verifiedItems.length})
+                </button>
+              </div>
 
-        {/* Sub-tabs & Action */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eaecf0] pb-3 select-none">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSubTab('needs_review')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                subTab === 'needs_review'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>Needs review</span>
-              <span className="text-[10px] font-mono opacity-80">107</span>
-            </button>
-
-            <button
-              onClick={() => setSubTab('verified')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                subTab === 'verified'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>Verified</span>
-              <span className="text-[10px] font-mono opacity-80">51</span>
-            </button>
-
-            <button
-              onClick={() => setSubTab('newly_introduced')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                subTab === 'newly_introduced'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <span>Newly introduced</span>
-              <span className="text-[10px] font-mono opacity-80">57</span>
-            </button>
-          </div>
-
-          <button
-            onClick={openScanModal}
-            className="btn-primary text-xs font-bold px-4 py-1.5 self-start sm:self-auto"
-          >
-            <span>Review & apply ZIP</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Remediation Cards List */}
-        <div className="space-y-3">
-          {items.map((item: any) => (
-            <div
-              key={item.id}
-              onClick={() => openDrawer(item)}
-              className="card p-4.5 card-hover flex items-center justify-between gap-4 cursor-pointer"
-            >
-              <div className="flex items-start gap-3 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
-                <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">
-                    {item.title}
-                  </h4>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
-                    {item.scanner || 'auth-service'} • {item.file_path || 'package-lock.json'}
+              {/* Items List */}
+              <div className="space-y-2 max-h-[750px] overflow-y-auto pr-1">
+                {activeList.length === 0 ? (
+                  <div className="card p-8 text-center text-xs text-slate-500">
+                    No findings in this category.
                   </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="badge-critical text-[11px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                  Critical
-                </span>
-                <ChevronDown className="w-4 h-4 text-slate-400 -rotate-90" />
+                ) : (
+                  activeList.map((f) => {
+                    const isSelected = selectedFinding?.id === f.id
+                    return (
+                      <div
+                        key={f.id}
+                        onClick={() => {
+                          setSelectedFinding(f)
+                          setSearchParams({ finding: f.id })
+                        }}
+                        className={`card p-3.5 cursor-pointer transition ${
+                          isSelected
+                            ? 'border-blue-500 bg-[#161d2d] shadow-md'
+                            : 'hover:border-[#2b354e] hover:bg-[#151926]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <SeverityBadge severity={f.severity} />
+                          <span className="text-[10px] font-mono text-slate-400 uppercase bg-[#0c0e14] px-1.5 py-0.5 rounded border border-[#1f2638]">
+                            {f.category}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                          {f.title}
+                        </h4>
+                        {f.file_path && (
+                          <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mt-2 truncate">
+                            <FileCode className="w-3 h-3 text-slate-500 flex-shrink-0" />
+                            <span className="truncate">{f.file_path}</span>
+                            {f.line_number && <span className="text-slate-500">:{f.line_number}</span>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
-          ))}
-        </div>
+
+            {/* RIGHT COLUMN: Code Remediation Studio */}
+            <div className="lg:col-span-8">
+              {selectedFinding ? (
+                <CodeRemediationStudio
+                  finding={selectedFinding}
+                  standalone={true}
+                  onResolved={(fId) => {
+                    const item = findings.find((f) => f.id === fId)
+                    if (item) {
+                      item.status = 'remediated'
+                      item.verification_status = 'pending_verification'
+                    }
+                  }}
+                />
+              ) : (
+                <div className="card p-12 text-center text-slate-400 text-xs">
+                  Select a vulnerability from the queue to inspect the code diff and remediation patch.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   )

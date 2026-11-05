@@ -1,0 +1,21 @@
+# Web Framework - Remediated to secure versions
+Django>=2.2.4
+Flask>=1.0.0
+Werkzeug>=0.15.3
+
+# Database - Remediated
+SQLAlchemy>=1.2.18
+pymysql>=0.9.3
+
+# Utilities - Remediated
+requests>=2.20.0
+Pillow>=7.1.0
+PyYAML>=5.3.1
+cryptography>=2.3
+
+# Serialization - Remediated
+PyJWT>=2.4.0
+marshmallow>=3.0.0
+
+# Dev
+Jinja2>=2.11.3

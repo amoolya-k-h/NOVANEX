@@ -1,0 +1,26 @@
+app:
+  name: "My Secured App"
+  debug: false
+  secret_key: "${APP_SECRET_KEY}"
+  allowed_hosts: ["app.example.com"]
+
+database:
+  host: "${DB_HOST}"
+  port: 5432
+  name: "production_db"
+  username: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  
+redis:
+  host: "${REDIS_HOST}"
+  password: "${REDIS_PASSWORD}"
+  
+aws:
+  region: "us-east-1"
+  # Credentials read automatically from IAM instance profile or AWS_ACCESS_KEY_ID env var
+
+security:
+  enable_cors: true
+  cors_origins: ["https://app.example.com"]
+  ssl_verify: true
+  disable_auth: false

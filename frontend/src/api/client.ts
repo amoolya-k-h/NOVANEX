@@ -26,10 +26,13 @@ export const getFindingDiff = (findingId: string) => api.get(`/ai/diff/${finding
 export const sendAIChat = (findingId: string, message: string, history?: any[]) =>
   api.post('/ai/chat', { finding_id: findingId, message, history })
 export const resolveFinding = (findingId: string) => api.post(`/findings/${findingId}/resolve`)
+export const applyFix = (findingId: string, approved: boolean = true, customPatch?: string) =>
+  api.post('/ai/apply-fix', { finding_id: findingId, approved, custom_patch: customPatch })
 export const startVerification = (origId: string, fd: FormData) =>
   api.post(`/verify/${origId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
 export const getComparison = (origId: string, verifId: string) => api.get(`/verify/${origId}/compare/${verifId}`)
 export const downloadHtmlReport = (id: string) => window.open(`/api/reports/${id}/html`, '_blank')
+export const downloadJsonReport = (id: string) => window.open(`/api/reports/${id}/json`, '_blank')
 
 export const streamAIExplanation = (findingId: string, onChunk: (t: string) => void, onDone: () => void) => {
   const es = new EventSource(`/api/ai/explain/${findingId}/stream`)

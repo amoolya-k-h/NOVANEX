@@ -31,28 +31,27 @@ export default function Landing() {
           <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-sm text-blue-400 mb-8">
             <Zap className="w-4 h-4" /> AI-Powered Developer Security Scanner
           </div>
-          <h1 className="text-6xl md:text-7xl font-black text-white leading-tight mb-6">
-            Repo<span className="text-amber-400">Guard</span> AI
+          <h1 className="text-5xl md:text-6xl font-black text-white leading-tight mb-6 max-w-4xl mx-auto">
+            Secure Your Code Before <span className="text-amber-400">Attackers Find the Flaws.</span>
           </h1>
-          <div className="flex items-center justify-center gap-4 text-2xl font-bold mb-8">
-            <span className="text-blue-400">Detect</span>
+          <div className="flex items-center justify-center gap-4 text-xl font-bold mb-6">
+            <span className="text-blue-400">DETECT</span>
             <span className="text-[#2d3748]">·</span>
-            <span className="text-amber-400">Explain</span>
+            <span className="text-amber-400">EXPLAIN</span>
             <span className="text-[#2d3748]">·</span>
-            <span className="text-purple-400">Fix</span>
+            <span className="text-purple-400">FIX</span>
             <span className="text-[#2d3748]">·</span>
-            <span className="text-green-400">Verify</span>
+            <span className="text-green-400">VERIFY</span>
           </div>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Upload your project. Get instant security analysis powered by real scanners and Gemini AI. 
-            Understand vulnerabilities, apply fixes, and verify results — all in one workflow.
+          <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed">
+            Detect vulnerabilities, understand security risks, get actionable fixes and verify every improvement with RepoGuard AI.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <Link to="/upload" className="btn-primary flex items-center gap-2 text-lg px-8 py-3.5">
-              Scan Now <ArrowRight className="w-5 h-5" />
+            <Link to="/upload" className="btn-primary flex items-center gap-2 text-base px-8 py-3.5">
+              Start Free Scan <ArrowRight className="w-5 h-5" />
             </Link>
-            <Link to="/dashboard" className="btn-secondary flex items-center gap-2 text-lg px-8 py-3.5">
-              View Dashboard
+            <Link to="/dashboard" className="btn-secondary flex items-center gap-2 text-base px-8 py-3.5">
+              Explore Features
             </Link>
           </div>
         </motion.div>

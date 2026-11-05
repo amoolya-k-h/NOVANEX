@@ -5,7 +5,7 @@ import {
   RotateCcw, ArrowUpRight
 } from 'lucide-react'
 import { Finding } from '../types'
-import { getFindingDiff, sendAIChat, resolveFinding, streamAIRemediation } from '../api/client'
+import { getFindingDiff, sendAIChat, resolveFinding, streamAIRemediation, applyFix } from '../api/client'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -124,9 +124,12 @@ export default function CodeRemediationStudio({
   const handleApplyFixAndVerify = async () => {
     setIsApplyingFix(true)
     try {
+      await applyFix(finding.id, true, diffData?.patch)
       await resolveFinding(finding.id)
       setIsResolved(true)
-      toast.success('Fix verified and applied! Vulnerability marked RESOLVED.')
+      finding.status = 'resolved'
+      finding.verification_status = 'resolved'
+      toast.success('Fix approved and applied! Vulnerability marked RESOLVED.')
       if (onResolved) onResolved(finding.id)
     } catch {
       toast.error('Failed to apply fix automatically')

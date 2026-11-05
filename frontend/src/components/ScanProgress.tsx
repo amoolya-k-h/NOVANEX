@@ -3,8 +3,9 @@ import { CheckCircle, Loader2, Clock } from 'lucide-react'
 
 const scanners = [
   { key: 'gitleaks_done', name: 'Gitleaks', desc: 'Secret Detection' },
-  { key: 'trivy_done', name: 'Trivy', desc: 'Vulns & Config' },
-  { key: 'osv_done', name: 'OSV-Scanner', desc: 'Dependency Analysis' },
+  { key: 'trivy_done', name: 'Trivy', desc: 'Misconfig & IaC' },
+  { key: 'osv_done', name: 'OSV-Scanner', desc: 'Dependency CVEs' },
+  { key: 'semgrep_done', name: 'Semgrep', desc: 'Code Patterns (SAST)' },
 ]
 
 export default function ScanProgress({ progress }: { progress: any }) {
@@ -24,7 +25,7 @@ export default function ScanProgress({ progress }: { progress: any }) {
           />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {scanners.map(({ key, name, desc }) => {
           const done = !!progress[key]
           const running = !done && progress.status === 'scanning'

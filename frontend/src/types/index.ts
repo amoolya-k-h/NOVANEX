@@ -1,6 +1,6 @@
 export type ScanStatus = 'pending' | 'scanning' | 'processing' | 'ai_analysis' | 'completed' | 'failed'
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO'
-export type Category = 'secret' | 'dependency' | 'misconfiguration'
+export type Category = 'secret' | 'dependency' | 'misconfiguration' | 'sast' | 'code'
 export type Priority = 'P1' | 'P2' | 'P3' | 'P4'
 
 export interface Scan {
@@ -60,6 +60,7 @@ export interface ScanProgress {
   gitleaks_done: boolean
   trivy_done: boolean
   osv_done: boolean
+  semgrep_done?: boolean
   findings_count: number
   error?: string
 }

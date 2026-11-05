@@ -37,24 +37,41 @@ async def get_findings(
     category: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Finding).filter(Finding.scan_id == scan_id)
     if category:
-        q = q.filter(Finding.category == category)
+        if category in ("sast", "code"):
+            q = q.filter(Finding.category.in_(["sast", "code"]))
+        elif category in ("misconfiguration", "misconfig", "iac"):
+            q = q.filter(Finding.category.in_(["misconfiguration", "iac"]))
+        else:
+            q = q.filter(Finding.category == category)
     if severity:
-        q = q.filter(Finding.severity == severity)
+        q = q.filter(Finding.severity == severity.upper())
     if priority:
-        q = q.filter(Finding.priority == priority)
+        q = q.filter(Finding.priority == priority.upper())
+    if status:
+        if status == "resolved":
+            q = q.filter((Finding.status == "resolved") | (Finding.verification_status == "resolved"))
+        elif status == "open":
+            q = q.filter(
+                (Finding.status != "resolved")
+                & ((Finding.verification_status != "resolved") | (Finding.verification_status == None))
+            )
 
     findings = q.order_by(Finding.risk_score.desc()).all()
     all_f = db.query(Finding).filter(Finding.scan_id == scan_id).all()
 
     by_sev, by_cat, by_pri = {}, {}, {}
     for f in all_f:
-        by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
-        by_cat[f.category] = by_cat.get(f.category, 0) + 1
-        by_pri[f.priority] = by_pri.get(f.priority, 0) + 1
+        s_key = f.severity or "UNKNOWN"
+        c_key = f.category or "uncategorized"
+        p_key = f.priority or "P4"
+        by_sev[s_key] = by_sev.get(s_key, 0) + 1
+        by_cat[c_key] = by_cat.get(c_key, 0) + 1
+        by_pri[p_key] = by_pri.get(p_key, 0) + 1
 
     return {
         "findings": [_serialize(f) for f in findings],

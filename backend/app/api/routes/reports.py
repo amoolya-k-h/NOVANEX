@@ -1,5 +1,6 @@
 import os
 import uuid
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -12,6 +13,11 @@ from app.api.routes.findings import _serialize
 from app.core.config import settings
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+
+def _safe_filename(name: str) -> str:
+    cleaned = re.sub(r'[^a-zA-Z0-9_\-]', '-', name or "project").strip('-')
+    return cleaned or "project"
 
 
 @router.get("/{scan_id}/json")
@@ -28,7 +34,7 @@ async def download_json(scan_id: str, db: Session = Depends(get_db)):
         "created_at": scan.created_at.isoformat() if scan.created_at else None,
     }
     report = generate_json_report(scan_dict, [_serialize(f) for f in findings])
-    name = scan.project_name.replace(" ", "-")
+    name = _safe_filename(scan.project_name)
     return JSONResponse(content=report, headers={
         "Content-Disposition": f"attachment; filename=repoguard-{name}-{scan_id[:8]}.json"
     })
@@ -46,7 +52,7 @@ async def download_html(scan_id: str, db: Session = Depends(get_db)):
 
     report_dir = os.path.join(settings.UPLOAD_DIR, "reports")
     os.makedirs(report_dir, exist_ok=True)
-    name = scan.project_name.replace(" ", "-")
+    name = _safe_filename(scan.project_name)
     filename = f"repoguard-{name}-{scan_id[:8]}.html"
     filepath = os.path.join(report_dir, filename)
 

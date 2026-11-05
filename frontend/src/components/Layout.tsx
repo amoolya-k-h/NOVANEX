@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Shield, BarChart2, FolderGit2, AlertTriangle, Brain, Wrench, Clock, FileText,
   Search, HelpCircle, Bell, ChevronDown, CheckCircle2, ArrowRight, Settings,
-  ExternalLink, Sparkles
+  ExternalLink, Sparkles, Plus, CheckCircle, Lock
 } from 'lucide-react'
 import { useScanStore } from '../store/useScanStore'
 import WorkflowModal from './WorkflowModal'
@@ -23,18 +23,21 @@ export default function Layout({ children }: LayoutProps) {
     activeDrawerFinding,
     closeDrawer,
     findings,
+    scans,
   } = useScanStore()
 
   const [showRecentActivity, setShowRecentActivity] = useState(false)
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false)
 
   const navItems = [
-    { path: '/', label: 'Overview', icon: BarChart2 },
-    { path: '/repositories', label: 'Repositories', icon: FolderGit2, badge: '4' },
-    { path: '/findings', label: 'Findings', icon: AlertTriangle, badge: findings.length > 0 ? String(findings.length) : '107' },
-    { path: '/analyst', label: 'AI Analyst', icon: Brain, pill: 'BETA' },
+    { path: '/dashboard', label: 'Dashboard', icon: BarChart2 },
+    { path: '/upload', label: 'New Scan', icon: Plus, highlight: true },
+    { path: '/repositories', label: 'Repositories', icon: FolderGit2 },
+    { path: '/findings', label: 'Findings', icon: AlertTriangle, badge: findings.length > 0 ? String(findings.length) : undefined },
+    { path: '/analyst', label: 'AI Analyst', icon: Brain, pill: 'AI' },
     { path: '/remediation', label: 'Remediation', icon: Wrench },
-    { path: '/history', label: 'Scan history', icon: Clock },
+    { path: '/verification', label: 'Verification', icon: CheckCircle },
+    { path: '/history', label: 'Scan History', icon: Clock, badge: scans.length > 0 ? String(scans.length) : undefined },
     { path: '/reports', label: 'Reports', icon: FileText },
   ]
 
@@ -42,94 +45,66 @@ export default function Layout({ children }: LayoutProps) {
     const item = navItems.find((n) => n.path === loc.pathname)
     if (item) return item.label
     if (loc.pathname === '/settings') return 'Settings'
-    return 'Overview'
+    if (loc.pathname === '/') return 'Landing'
+    return 'Dashboard'
   }
 
   return (
-    <div className="min-h-screen bg-[#fbfbfc] flex text-slate-800">
+    <div className="min-h-screen bg-[#0c0e14] flex text-slate-100">
       {/* LEFT SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-[#eaecf0] flex flex-col fixed h-full z-20 select-none">
+      <aside className="w-64 bg-[#11141f] border-r border-[#1f2433] flex flex-col fixed h-full z-20 select-none">
         {/* Logo Brand */}
-        <div className="p-5 pb-4">
+        <div className="p-5 pb-4 border-b border-[#1f2433]">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#ea580c] flex items-center justify-center text-white shadow-sm">
-              <Shield className="w-5 h-5 fill-white" />
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+              <Shield className="w-5 h-5 text-white" />
             </div>
-            <span className="font-extrabold text-slate-900 text-lg tracking-tight">
-              RepoGuard <span className="font-semibold text-slate-700">AI</span>
+            <span className="font-extrabold text-white text-lg tracking-tight">
+              Repo<span className="text-amber-400">Guard</span> <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-mono ml-1">AI</span>
             </span>
           </Link>
 
-          {/* Workspace Selector */}
-          <div className="relative mt-4">
-            <button
-              onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-[#eaecf0] hover:bg-slate-100 transition text-xs font-semibold text-slate-700"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <span className="text-slate-400 font-mono text-[11px]">&lt;/&gt;</span>
-                <span className="truncate">Personal workspace</span>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-
-            {showWorkspaceMenu && (
-              <div className="absolute left-0 top-11 w-full bg-white border border-[#eaecf0] rounded-xl shadow-lg p-1.5 z-30 text-xs">
-                <div className="px-2.5 py-1.5 font-bold text-slate-400 text-[10px] uppercase">Workspaces</div>
-                <button
-                  onClick={() => setShowWorkspaceMenu(false)}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-[#fff7ed] text-[#ea580c] font-semibold flex items-center justify-between"
-                >
-                  <span>Personal workspace</span>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </button>
-                <div className="border-t border-[#eaecf0] my-1" />
-                <button
-                  onClick={() => {
-                    setShowWorkspaceMenu(false)
-                    navigate('/settings')
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 text-slate-600 flex items-center gap-2"
-                >
-                  <Settings className="w-3.5 h-3.5" /> Workspace settings
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Quick Action Button */}
+          <Link
+            to="/upload"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md transition"
+          >
+            <Plus className="w-3.5 h-3.5" /> Start Security Scan
+          </Link>
         </div>
 
         {/* Navigation Items */}
-        <div className="px-4 pt-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 mb-1.5">
-            Workspace
+        <div className="px-4 pt-3">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 mb-1.5">
+            Security Modules
           </div>
         </div>
 
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon
-            const active = loc.pathname === item.path || (item.path !== '/' && loc.pathname.startsWith(item.path))
+            const active = loc.pathname === item.path || (item.path !== '/dashboard' && loc.pathname.startsWith(item.path))
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                   active
-                    ? 'bg-[#fff7ed] text-[#ea580c] border border-[#ffedd5]'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161a27]'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
-                  <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[#ea580c]' : 'text-slate-400'}`} />
+                  <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-blue-400' : 'text-slate-500'}`} />
                   <span className="truncate">{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className="text-[11px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                  <span className="text-[10px] font-mono font-bold text-slate-300 bg-[#1e2436] px-1.5 py-0.5 rounded-md border border-[#2d364f]">
                     {item.badge}
                   </span>
                 )}
                 {item.pill && (
-                  <span className="text-[9px] font-bold text-[#ea580c] bg-[#ffedd5] px-1.5 py-0.5 rounded-md tracking-wider">
+                  <span className="text-[9px] font-bold text-violet-300 bg-violet-500/20 px-1.5 py-0.5 rounded-md border border-violet-500/30 tracking-wider">
                     {item.pill}
                   </span>
                 )}
@@ -139,120 +114,77 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* Bottom Banner */}
-        <div className="p-3 border-t border-[#eaecf0]">
-          <div className="bg-[#fbfbfc] border border-[#eaecf0] rounded-2xl p-3.5 text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-              <Shield className="w-3.5 h-3.5 text-[#ea580c]" />
-              <span>Ship with confidence.</span>
+        <div className="p-3 border-t border-[#1f2433]">
+          <div className="bg-[#141824] border border-[#21283b] rounded-xl p-3 text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-slate-200">
+              <Lock className="w-3.5 h-3.5 text-blue-400" />
+              <span>Detect • Explain • Fix • Verify</span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              A little more security. A lot more peace of mind.
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Real vulnerability scanning grounded with Gemini AI.
             </p>
             <button
               onClick={openWorkflowModal}
-              className="text-[11px] font-bold text-[#ea580c] hover:underline flex items-center gap-1 pt-1"
+              className="text-[11px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 pt-1"
             >
-              Explore the workflow <ArrowRight className="w-3 h-3" />
+              How it works <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         </div>
 
         {/* Footer info */}
-        <div className="px-4 py-2 text-[10px] text-slate-400 text-center border-t border-[#eaecf0]/60">
-          Detect. Explain. Fix. Verify.
+        <div className="px-4 py-2.5 text-[10px] text-slate-500 text-center border-t border-[#1f2433]/70 flex items-center justify-between">
+          <span>v1.0.0</span>
+          <Link to="/settings" className="hover:text-slate-300 flex items-center gap-1">
+            <Settings className="w-3 h-3" /> Settings
+          </Link>
         </div>
       </aside>
 
       {/* MAIN CONTAINER */}
-      <div className="flex-1 ml-64 min-h-screen flex flex-col">
+      <div className="flex-1 ml-64 min-h-screen flex flex-col bg-[#0c0e14]">
         {/* TOP HEADER */}
-        <header className="bg-white border-b border-[#eaecf0] px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 select-none">
+        <header className="bg-[#11141f]/90 backdrop-blur-sm border-b border-[#1f2433] px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 select-none">
           {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-            <span>Workspace</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-slate-900 font-bold">{getPageTitle()}</span>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+            <Link to="/dashboard" className="hover:text-slate-200">RepoGuard</Link>
+            <span className="text-slate-600">/</span>
+            <span className="text-white font-bold">{getPageTitle()}</span>
           </div>
 
           {/* Right Header Elements */}
           <div className="flex items-center gap-3">
-            {/* Search Bar */}
-            <div className="relative w-64 hidden sm:block">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search anything... ⌘K"
-                className="w-full bg-[#fbfbfc] border border-[#eaecf0] focus:border-[#ea580c] rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition"
-              />
-            </div>
-
             {/* Help / Workflow Button */}
             <button
               onClick={openWorkflowModal}
               title="A complete security workflow"
-              className="w-8 h-8 rounded-full border border-[#eaecf0] hover:bg-slate-50 text-slate-500 hover:text-slate-800 flex items-center justify-center transition text-xs font-bold"
+              className="w-8 h-8 rounded-lg border border-[#212738] bg-[#141824] hover:bg-[#1a2030] text-slate-400 hover:text-slate-200 flex items-center justify-center transition text-xs font-bold"
             >
-              ?
+              <HelpCircle className="w-4 h-4" />
             </button>
 
-            {/* Recent Activity Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setShowRecentActivity(!showRecentActivity)}
-                className="w-8 h-8 rounded-full border border-[#eaecf0] hover:bg-slate-50 text-slate-500 hover:text-slate-800 flex items-center justify-center transition relative"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="w-2 h-2 rounded-full bg-[#ea580c] absolute top-1 right-1" />
-              </button>
-
-              {showRecentActivity && (
-                <div className="absolute right-0 top-10 w-72 bg-white border border-[#eaecf0] rounded-2xl shadow-xl p-4 z-40 text-xs animate-fadeIn">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#eaecf0] mb-3">
-                    <span className="font-bold text-slate-800">Recent activity</span>
-                    <button onClick={() => setShowRecentActivity(false)} className="text-slate-400 hover:text-slate-700">
-                      ✕
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold text-slate-800">auth-service • Dependency Check</div>
-                        <div className="text-[11px] text-slate-400">65 findings • Nov 1, 10:48</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold text-slate-800">ecommerce-api • Rescan 7</div>
-                        <div className="text-[11px] text-slate-400">3 findings • Nov 1, 10:48</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold text-slate-800">infrastructure • Baseline</div>
-                        <div className="text-[11px] text-slate-400">11 findings • Nov 1, 10:47</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Quick Upload Action */}
+            <Link
+              to="/upload"
+              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Scan</span>
+            </Link>
 
             {/* User Profile Avatar */}
             <Link
               to="/settings"
               title="Settings"
-              className="w-8 h-8 rounded-full bg-[#fff7ed] border border-[#ffedd5] text-[#ea580c] font-bold text-xs flex items-center justify-center hover:shadow-sm transition"
+              className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-xs flex items-center justify-center hover:bg-blue-500/20 transition"
             >
-              G
+              RG
             </Link>
           </div>
         </header>
 
         {/* Page Children */}
-        <main className="flex-1 bg-[#fbfbfc] p-8">{children}</main>
+        <main className="flex-1 p-8 bg-[#0c0e14]">{children}</main>
       </div>
 
       {/* Global Modals & Drawers */}

@@ -5,7 +5,7 @@ import {
   ExternalLink, Loader2
 } from 'lucide-react'
 import { useScanStore } from '../store/useScanStore'
-import { uploadScan, scanProgressSSE, getFindings } from '../api/client'
+import { uploadScan, scanProgressSSE, getFindings, getScan } from '../api/client'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 
@@ -36,30 +36,58 @@ export default function ScanModal() {
 
     try {
       const res = await uploadScan(formData)
-      const scanId = res.data.scan_id
+      const scanId = res.data.id || res.data.scan_id
       setCurrentScan(res.data)
       setProgressPct(35)
       setProgressMsg('Extracting files and initializing security scanners...')
 
+      let modalCompletedHandled = false
+      const finishModalScan = (count: number) => {
+        if (modalCompletedHandled) return
+        modalCompletedHandled = true
+        setProgressPct(100)
+        setProgressMsg('Scan complete! Correlating findings...')
+        getFindings(scanId).then((fRes) => {
+          setFindings(fRes.data.findings || [])
+          setUploading(false)
+          setStep(2)
+          toast.success(`Scan completed successfully! ${count} findings detected.`)
+        })
+      }
+
       // Connect SSE
-      scanProgressSSE(scanId, (data) => {
+      const es = scanProgressSSE(scanId, (data) => {
         if (data.progress !== undefined) setProgressPct(Math.max(35, data.progress))
-        if (data.message) setProgressMsg(data.message)
+        if (data.current_step || data.message) setProgressMsg(data.current_step || data.message)
 
         if (data.status === 'completed') {
-          setProgressPct(100)
-          setProgressMsg('Scan complete! Correlating findings...')
-          getFindings(scanId).then((fRes) => {
-            setFindings(fRes.data.findings || [])
-            setUploading(false)
-            setStep(2)
-            toast.success('Scan completed successfully!')
-          })
+          finishModalScan(data.findings_count || 0)
         } else if (data.status === 'failed') {
           setUploading(false)
-          toast.error(data.message || 'Scan failed')
+          toast.error(data.error || data.message || 'Scan failed')
         }
       })
+
+      // Polling fallback
+      const modalPoll = setInterval(async () => {
+        if (modalCompletedHandled) {
+          clearInterval(modalPoll)
+          return
+        }
+        try {
+          const sRes = await getScan(scanId)
+          if (sRes.data.status === 'completed') {
+            clearInterval(modalPoll)
+            try { es.close() } catch {}
+            finishModalScan(sRes.data.total_findings || 0)
+          } else if (sRes.data.status === 'failed') {
+            clearInterval(modalPoll)
+            try { es.close() } catch {}
+            setUploading(false)
+            toast.error(sRes.data.error_message || 'Scan failed')
+          }
+        } catch {}
+      }, 1500)
     } catch (err: any) {
       setUploading(false)
       toast.error(err.response?.data?.detail || 'Failed to upload project')
