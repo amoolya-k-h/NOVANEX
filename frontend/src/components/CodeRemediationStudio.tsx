@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { Finding } from '../types'
 import { getFindingDiff, sendAIChat, resolveFinding, streamAIRemediation, applyFix } from '../api/client'
+import GitHubPRModal from './GitHubPRModal'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -59,6 +60,7 @@ export default function CodeRemediationStudio({
   const [showPrDropdown, setShowPrDropdown] = useState(false)
   const [isApplyingFix, setIsApplyingFix] = useState(false)
   const [isResolved, setIsResolved] = useState(finding?.verification_status === 'resolved')
+  const [isPRModalOpen, setIsPRModalOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [sendingChat, setSendingChat] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -531,6 +533,13 @@ export default function CodeRemediationStudio({
               </span>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setIsPRModalOpen(true)}
+                  className="text-white px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-500 border border-purple-400/30 flex items-center gap-1.5 font-medium transition"
+                  title="Create GitHub Pull Request"
+                >
+                  <GitPullRequest className="w-3.5 h-3.5" /> Create GitHub PR
+                </button>
+                <button
                   onClick={handleDownloadPatch}
                   className="hover:text-white px-2.5 py-1 rounded bg-[#21262d] border border-[#30363d] flex items-center gap-1.5 transition"
                 >
@@ -547,6 +556,18 @@ export default function CodeRemediationStudio({
             </div>
           </div>
         </div>
+
+        {/* GitHub Pull Request Modal */}
+        <GitHubPRModal
+          finding={finding}
+          patch={diffData?.patch}
+          isOpen={isPRModalOpen}
+          onClose={() => setIsPRModalOpen(false)}
+          onSuccess={() => {
+            setIsResolved(true)
+            if (onResolved) onResolved(finding.id)
+          }}
+        />
       </div>
     </div>
   )

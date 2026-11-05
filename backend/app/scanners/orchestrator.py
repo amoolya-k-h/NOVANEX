@@ -21,6 +21,7 @@ class ScanOrchestrator:
         self.trivy = TrivyScanner(timeout=settings.SCAN_TIMEOUT)
         self.osv = OSVScanner(timeout=settings.SCAN_TIMEOUT)
         self.semgrep = SemgrepScanner(timeout=settings.SCAN_TIMEOUT)
+        self.base_dirs = {}
 
     async def extract_project(self, zip_path: str) -> str:
         extract_dir = os.path.join(settings.UPLOAD_DIR, f"extracted_{uuid.uuid4().hex}")
@@ -36,11 +37,20 @@ class ScanOrchestrator:
                     if total_size > 100 * 1024 * 1024:
                         raise ValueError("ZIP contents exceed 100MB limit")
                 zf.extractall(extract_dir)
+
+            # Check if ZIP unpacks into a single root folder (standard for GitHub downloads)
+            entries = [e for e in os.listdir(extract_dir) if not e.startswith("__MACOSX")]
+            if len(entries) == 1:
+                single_path = os.path.join(extract_dir, entries[0])
+                if os.path.isdir(single_path):
+                    self.base_dirs[single_path] = extract_dir
+                    return single_path
+
+            self.base_dirs[extract_dir] = extract_dir
+            return extract_dir
         except zipfile.BadZipFile:
             shutil.rmtree(extract_dir, ignore_errors=True)
             raise ValueError("Invalid ZIP file")
-
-        return extract_dir
 
     async def run_all_scanners(
         self,
@@ -70,8 +80,9 @@ class ScanOrchestrator:
         return out
 
     def cleanup_project(self, project_path: str):
+        target = self.base_dirs.get(project_path, project_path)
         try:
-            shutil.rmtree(project_path, ignore_errors=True)
+            shutil.rmtree(target, ignore_errors=True)
         except Exception as e:
-            logger.warning(f"Cleanup failed for {project_path}: {e}")
+            logger.warning(f"Cleanup failed for {target}: {e}")
 

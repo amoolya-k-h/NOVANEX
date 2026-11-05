@@ -34,6 +34,22 @@ export const getComparison = (origId: string, verifId: string) => api.get(`/veri
 export const downloadHtmlReport = (id: string) => window.open(`/api/reports/${id}/html`, '_blank')
 export const downloadJsonReport = (id: string) => window.open(`/api/reports/${id}/json`, '_blank')
 
+export const validateGithubToken = (githubToken: string) =>
+  api.post('/github/validate-token', { github_token: githubToken })
+
+export const createGithubPR = (payload: {
+  github_token?: string
+  repo_url_or_name: string
+  finding_id: string
+  branch_name?: string
+  pr_title?: string
+  pr_body?: string
+  file_path?: string
+  updated_content?: string
+  custom_patch?: string
+  dry_run?: boolean
+}) => api.post('/github/create-pr', payload)
+
 export const streamAIExplanation = (findingId: string, onChunk: (t: string) => void, onDone: () => void) => {
   const es = new EventSource(`/api/ai/explain/${findingId}/stream`)
   es.onmessage = (e) => {

@@ -1,19 +1,48 @@
 import React, { useState } from 'react'
 import {
   Shield, Check, Terminal, Brain, Lock, EyeOff, FileCheck, ShieldCheck,
-  Server, Cpu, Database, KeyRound, CheckCircle
+  Server, Cpu, Database, KeyRound, CheckCircle, Github, GitPullRequest,
+  ExternalLink, Loader2
 } from 'lucide-react'
 import Layout from '../components/Layout'
+import { validateGithubToken } from '../api/client'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
-  const [apiKey, setApiKey] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [githubToken, setGithubToken] = useState(localStorage.getItem('repoguard_github_token') || '')
+  const [githubRepo, setGithubRepo] = useState(localStorage.getItem('repoguard_github_repo') || '')
+  const [testingToken, setTestingToken] = useState(false)
+  const [tokenStatus, setTokenStatus] = useState<any>(null)
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSaveGithub = (e: React.FormEvent) => {
     e.preventDefault()
-    setSaved(true)
-    toast.success('Settings updated locally.')
+    localStorage.setItem('repoguard_github_token', githubToken.trim())
+    localStorage.setItem('repoguard_github_repo', githubRepo.trim())
+    toast.success('GitHub integration settings saved!')
+  }
+
+  const handleTestToken = async () => {
+    if (!githubToken.trim()) {
+      toast.error('Please enter a GitHub Personal Access Token to test')
+      return
+    }
+    setTestingToken(true)
+    setTokenStatus(null)
+    try {
+      const res = await validateGithubToken(githubToken.trim())
+      if (res.data.valid) {
+        setTokenStatus(res.data)
+        toast.success(`Connected as @${res.data.username}!`)
+      } else {
+        setTokenStatus({ error: res.data.error || 'Token validation failed' })
+        toast.error(res.data.error || 'Token validation failed')
+      }
+    } catch {
+      setTokenStatus({ error: 'Failed to reach GitHub API' })
+      toast.error('Failed to reach GitHub API')
+    } finally {
+      setTestingToken(false)
+    }
   }
 
   return (
@@ -131,6 +160,124 @@ export default function Settings() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* GitHub Integration Card */}
+        <div className="card p-7 space-y-5">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400 flex items-center justify-center">
+                <Github className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  GitHub Pull Request Integration
+                  <span className="text-[10px] font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/30">
+                    Live PR Automation
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Automatically create branches and open Pull Requests for approved AI security patches.
+                </p>
+              </div>
+            </div>
+            <a
+              href="https://github.com/settings/tokens/new?scopes=repo"
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 hidden sm:flex"
+            >
+              <span>Generate PAT</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+
+          <form onSubmit={handleSaveGithub} className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Default Target Repository
+                </label>
+                <input
+                  type="text"
+                  value={githubRepo}
+                  onChange={(e) => setGithubRepo(e.target.value)}
+                  placeholder="owner/repo (e.g. acme-corp/backend-service)"
+                  className="w-full bg-[#0c0e14] border border-[#212738] rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none focus:border-purple-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Personal Access Token (PAT)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    className="flex-1 bg-[#0c0e14] border border-[#212738] rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none focus:border-purple-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestToken}
+                    disabled={testingToken}
+                    className="btn-secondary px-3 py-2 text-xs flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    {testingToken ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Test</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {tokenStatus && (
+              <div
+                className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+                  tokenStatus.valid
+                    ? 'bg-green-500/10 border-green-500/30 text-green-300'
+                    : 'bg-red-500/10 border-red-500/30 text-red-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {tokenStatus.valid ? (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <Lock className="w-4 h-4 text-red-400" />
+                  )}
+                  <span>
+                    {tokenStatus.valid
+                      ? `Authenticated as @${tokenStatus.username} (${tokenStatus.name || 'Developer'})`
+                      : tokenStatus.error}
+                  </span>
+                </div>
+                {tokenStatus.avatar_url && (
+                  <img
+                    src={tokenStatus.avatar_url}
+                    alt={tokenStatus.username}
+                    className="w-5 h-5 rounded-full border border-green-400"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-[#1f2638]">
+              <span className="text-[11px] text-slate-400">
+                Credentials are saved only in your local browser storage.
+              </span>
+              <button
+                type="submit"
+                className="btn-primary text-xs py-2 px-4 bg-purple-600 hover:bg-purple-500"
+              >
+                Save GitHub Settings
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Security Controls & Privacy */}

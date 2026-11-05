@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.routes import scan, findings, ai, reports, verify
+from app.api.routes import scan, findings, ai, reports, verify, github
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +36,7 @@ app.include_router(findings.router)
 app.include_router(ai.router)
 app.include_router(reports.router)
 app.include_router(verify.router)
+app.include_router(github.router)
 
 
 @app.on_event("startup")

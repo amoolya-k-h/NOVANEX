@@ -2,11 +2,11 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import {
   Search, Plus, Download, ChevronDown, CheckCircle2, AlertTriangle,
-  FileCode, ExternalLink, Filter, ArrowUpDown, Shield, RefreshCw, X
+  FileCode, ExternalLink, Filter, ArrowUpDown, Shield, RefreshCw, X, ShieldCheck
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { useScanStore } from '../store/useScanStore'
-import { getFindings, listScans } from '../api/client'
+import { getFindings, listScans, downloadHtmlReport } from '../api/client'
 import { Finding } from '../types'
 import { SeverityBadge } from '../components/SeverityBadge'
 import toast from 'react-hot-toast'
@@ -278,26 +278,56 @@ export default function Findings() {
           </div>
         </div>
 
-        {/* FINDINGS TABLE OR EMPTY STATE */}
+        {/* FINDINGS TABLE OR EMPTY / CLEAN STATE */}
         {filteredFindings.length === 0 ? (
-          <div className="card p-12 text-center space-y-4 border-dashed border-[#26314d]">
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
+          findings.length === 0 && scans.length > 0 && selectedScanId !== 'all' ? (
+            /* Clean Bill of Health: Zero Vulnerabilities Detected */
+            <div className="card p-12 text-center space-y-5 border-emerald-500/30 bg-gradient-to-b from-[#131722] to-[#0c1f17]">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg animate-pulse">
+                <ShieldCheck className="w-9 h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Clean Bill of Health • 100/100 Posture
+                </div>
+                <h3 className="text-xl font-extrabold text-white">Zero Security Vulnerabilities Detected!</h3>
+                <p className="text-xs text-slate-300 max-w-lg mx-auto leading-relaxed">
+                  All 4 scanners (Gitleaks, OSV-Scanner, Trivy, Semgrep) completed deep multi-engine inspection with <strong>0 exposed secrets</strong>, <strong>0 vulnerable dependencies</strong>, <strong>0 SAST flaws</strong>, and <strong>0 misconfigurations</strong>.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => downloadHtmlReport(selectedScanId)}
+                  className="btn-secondary text-xs py-2 px-4 flex items-center gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download Clean Security Certificate
+                </button>
+                <Link to="/upload" className="btn-primary text-xs py-2 px-4 flex items-center gap-2">
+                  <Plus className="w-3.5 h-3.5" /> Scan Another Project
+                </Link>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white">No Vulnerabilities Match Filter</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                {findings.length === 0
-                  ? 'No scan findings in the database. Run a security scan to populate results.'
-                  : 'Try clearing your search query or adjusting the severity and category filters.'}
-              </p>
+          ) : (
+            /* Standard Filter / No Scan Empty State */
+            <div className="card p-12 text-center space-y-4 border-dashed border-[#26314d]">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">No Vulnerabilities Match Filter</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                  {findings.length === 0
+                    ? 'No scan findings in the database. Run a security scan to populate results.'
+                    : 'Try clearing your search query or adjusting the severity and category filters.'}
+                </p>
+              </div>
+              {findings.length === 0 && (
+                <Link to="/upload" className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-2">
+                  <Plus className="w-3.5 h-3.5" /> Start New Scan
+                </Link>
+              )}
             </div>
-            {findings.length === 0 && (
-              <Link to="/upload" className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-2">
-                <Plus className="w-3.5 h-3.5" /> Start New Scan
-              </Link>
-            )}
-          </div>
+          )
         ) : (
           <div className="card overflow-hidden">
             <div className="px-6 py-3 bg-[#151926] border-b border-[#212738] flex items-center justify-between text-xs text-slate-400">

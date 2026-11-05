@@ -3,6 +3,7 @@ import os
 import re
 from .base import BaseScanner, ScannerResult
 from app.core.config import settings
+from app.scanners.manifest_parser import discover_all_dependencies
 
 # Curated known vulnerability database for dependency detection
 KNOWN_VULNS = {
@@ -109,6 +110,64 @@ KNOWN_VULNS = {
                 "fixed": "2.3"
             }
         ]
+    },
+    "lodash": {
+        "4.17.15": [
+            {
+                "cve": "CVE-2020-8203",
+                "severity": "HIGH",
+                "cvss": 7.4,
+                "title": "Prototype Pollution in lodash.zipObjectDeep",
+                "description": "Prototype pollution in lodash before 4.17.19 allows attackers to modify Object.prototype.",
+                "fixed": "4.17.21"
+            }
+        ],
+        "4.17.11": [
+            {
+                "cve": "CVE-2019-10744",
+                "severity": "CRITICAL",
+                "cvss": 9.8,
+                "title": "Prototype Pollution in lodash defaultsDeep",
+                "description": "Critical prototype pollution flaw in lodash defaultsDeep allows remote command execution.",
+                "fixed": "4.17.12"
+            }
+        ]
+    },
+    "axios": {
+        "0.21.1": [
+            {
+                "cve": "CVE-2020-28168",
+                "severity": "HIGH",
+                "cvss": 7.5,
+                "title": "SSRF Proxy Bypass in axios",
+                "description": "Axios allows attackers to bypass proxy settings via follow-redirects.",
+                "fixed": "0.21.2"
+            }
+        ]
+    },
+    "jsonwebtoken": {
+        "8.5.1": [
+            {
+                "cve": "CVE-2022-23529",
+                "severity": "CRITICAL",
+                "cvss": 9.8,
+                "title": "Insecure Key Verification in jsonwebtoken verify()",
+                "description": "Allows arbitrary code execution when untrusted keys are passed into verify.",
+                "fixed": "9.0.0"
+            }
+        ]
+    },
+    "minimist": {
+        "1.2.0": [
+            {
+                "cve": "CVE-2020-7598",
+                "severity": "HIGH",
+                "cvss": 7.5,
+                "title": "Prototype Pollution in minimist",
+                "description": "minimist is vulnerable to Prototype Pollution via constructor.prototype.",
+                "fixed": "1.2.2"
+            }
+        ]
     }
 }
 
@@ -178,42 +237,45 @@ class TrivyScanner(BaseScanner):
 
     def _native_vuln_scan(self, project_path: str) -> list:
         findings = []
-        for root, _, files in os.walk(project_path):
-            for file_name in files:
-                if file_name.lower() == "requirements.txt":
-                    req_path = os.path.join(root, file_name)
-                    rel_path = os.path.relpath(req_path, project_path).replace("\\", "/")
-                    try:
-                        with open(req_path, "r", encoding="utf-8", errors="ignore") as f:
-                            for line_idx, line in enumerate(f, start=1):
-                                line = line.strip()
-                                if "==" in line:
-                                    pkg, ver = line.split("==", 1)
-                                    pkg = pkg.strip().lower()
-                                    ver = ver.strip()
-                                    if pkg in KNOWN_VULNS and ver in KNOWN_VULNS[pkg]:
-                                        for v in KNOWN_VULNS[pkg][ver]:
-                                            findings.append({
-                                                "scanner": "trivy",
-                                                "category": "dependency",
-                                                "title": f"{pkg} - {v['cve']}: {v['title']}",
-                                                "description": v["description"],
-                                                "severity": v["severity"],
-                                                "file_path": rel_path,
-                                                "line_number": line_idx,
-                                                "evidence": f"Package: {pkg}=={ver}",
-                                                "cve_id": v["cve"],
-                                                "cvss_score": v["cvss"],
-                                                "fix_available": True,
-                                                "fixed_version": v["fixed"],
-                                                "package_name": pkg,
-                                                "package_version": ver,
-                                                "reference_urls": [f"https://nvd.nist.gov/vuln/detail/{v['cve']}"],
-                                                "fingerprint": f"trivy-vuln-{pkg}-{v['cve']}",
-                                                "raw": v,
-                                            })
-                    except Exception:
-                        pass
+        parsed_deps = discover_all_dependencies(project_path)
+
+        for dep in parsed_deps:
+            pkg = dep.name.lower()
+            ver = dep.clean_version
+            if not ver or ver == "*":
+                continue
+
+            if pkg in KNOWN_VULNS:
+                vulns_for_pkg = KNOWN_VULNS[pkg]
+                matched_vulns = vulns_for_pkg.get(ver)
+                if not matched_vulns:
+                    for db_ver, v_list in vulns_for_pkg.items():
+                        if ver.startswith(db_ver) or db_ver.startswith(ver):
+                            matched_vulns = v_list
+                            break
+
+                if matched_vulns:
+                    for v in matched_vulns:
+                        findings.append({
+                            "scanner": "trivy",
+                            "category": "dependency",
+                            "title": f"{dep.name} - {v['cve']}: {v['title']}",
+                            "description": v["description"],
+                            "severity": v["severity"],
+                            "file_path": dep.file_path,
+                            "line_number": dep.line_number or 1,
+                            "evidence": f"Package: {dep.name}=={dep.raw_version}",
+                            "cve_id": v["cve"],
+                            "cvss_score": v["cvss"],
+                            "fix_available": True,
+                            "fixed_version": v["fixed"],
+                            "package_name": dep.name,
+                            "package_version": dep.clean_version or dep.raw_version,
+                            "reference_urls": [f"https://nvd.nist.gov/vuln/detail/{v['cve']}"],
+                            "fingerprint": f"trivy-vuln-{dep.name}-{v['cve']}-{dep.file_path}",
+                            "raw": v,
+                        })
+
         return findings
 
     def _native_misconfig_scan(self, project_path: str) -> list:

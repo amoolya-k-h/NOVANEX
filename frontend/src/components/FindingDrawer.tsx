@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import {
   X, ExternalLink, Copy, Check, Lightbulb, AlertTriangle, FileCode,
   Download, ArrowRight, ShieldCheck, Sparkles, Terminal, Brain, Wrench,
-  CheckCircle, Lock, ShieldAlert
+  CheckCircle, Lock, ShieldAlert, GitPullRequest
 } from 'lucide-react'
 import { Finding } from '../types'
 import { useScanStore } from '../store/useScanStore'
 import { streamAIExplanation, applyFix } from '../api/client'
 import { SeverityBadge } from './SeverityBadge'
+import GitHubPRModal from './GitHubPRModal'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
@@ -26,6 +27,7 @@ export default function FindingDrawer({ finding, onClose }: Props) {
   const [aiExplanation, setAiExplanation] = useState<string>('')
   const [explaining, setExplaining] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [isPRModalOpen, setIsPRModalOpen] = useState(false)
 
   if (!finding) return null
 
@@ -325,13 +327,10 @@ export default function FindingDrawer({ finding, onClose }: Props) {
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={() => {
-                    onClose()
-                    navigate(`/remediation?finding=${finding.id}`)
-                  }}
-                  className="btn-primary flex-1 text-xs py-2.5 flex items-center justify-center gap-1.5"
+                  onClick={() => setIsPRModalOpen(true)}
+                  className="btn-primary flex-1 text-xs py-2.5 flex items-center justify-center gap-1.5 bg-purple-600 hover:bg-purple-500"
                 >
-                  <Wrench className="w-4 h-4" /> Open Full Remediation Studio
+                  <GitPullRequest className="w-4 h-4" /> Create GitHub PR
                 </button>
                 <button
                   onClick={handleApplyFix}
@@ -340,6 +339,18 @@ export default function FindingDrawer({ finding, onClose }: Props) {
                 >
                   <CheckCircle className="w-4 h-4 text-green-400" />
                   <span>{applying ? 'Applying Fix...' : isResolved ? 'Fix Already Applied' : 'Approve & Apply Fix'}</span>
+                </button>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    onClose()
+                    navigate(`/remediation?finding=${finding.id}`)
+                  }}
+                  className="w-full text-xs py-2 px-3 rounded-xl bg-[#141824] hover:bg-[#1a2030] text-slate-300 hover:text-white border border-[#212738] flex items-center justify-center gap-1.5 transition"
+                >
+                  <Wrench className="w-3.5 h-3.5 text-blue-400" /> Open Full Remediation Studio (Side-by-Side Diff)
                 </button>
               </div>
             </div>
@@ -397,6 +408,16 @@ export default function FindingDrawer({ finding, onClose }: Props) {
             <span>Suggest Fix</span>
           </button>
         </div>
+        {/* GitHub Pull Request Modal */}
+        <GitHubPRModal
+          finding={finding}
+          isOpen={isPRModalOpen}
+          onClose={() => setIsPRModalOpen(false)}
+          onSuccess={() => {
+            finding.status = 'remediated'
+            finding.verification_status = 'pending_verification'
+          }}
+        />
       </div>
     </div>
   )
